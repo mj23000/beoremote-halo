@@ -1,6 +1,50 @@
-[build-system]
-requires = [
-    "setuptools>=46",
-    "wheel"
+[project]
+name = "beoremote-halo"
+version = "2.0.0"
+description = "Halo API client"
+authors = [{ name = "Bang & Olufsen", email = "support@bang-olufsen.dk" }]
+readme = "README.md"
+keywords = ["AsyncAPI", "Halo API"]
+requires-python = ">=3.11"
+dependencies = [
+    "aiohttp>=3.11.0,<4.0.0",
+    "inflection>=0.5.1,<1",
+    "mashumaro>=3.15,<4.0",
+    "zeroconf>=0.25.1,<1.0.0",
 ]
-build-backend = "setuptools.build_meta"
+
+classifiers = [
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Multimedia",
+    "Intended Audience :: Developers",
+]
+
+[project.license]
+text = "MIT"
+
+[project.urls]
+homepage = "https://pypi.org/project/beoremote-halo/"
+documentation = "https://bang-olufsen.github.io/beoremote-halo/"
+repository = "https://github.com/bang-olufsen/beoremote-halo"
+"Bug Tracker" = "https://github.com/bang-olufsen/beoremote-halo/issues"
+
+[project.scripts]
+halo_api = "halo_api.halo_cli:HaloApiCli"
+
+[dependency-groups]
+dev = ["ruff>=0.15.13", "ty>=0.0.37"]
+
+
+[build-system]
+requires = ["uv_build >= 0.11.5, <0.12.0"]
+build-backend = "uv_build"
+
+
+[tool.ruff]
+line-length = 140
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = ["FBT001", "FBT002", "FBT003", "PLR0913"]

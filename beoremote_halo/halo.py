@@ -1,0 +1,337 @@
+"""Halo client."""
+
+import asyncio
+import contextlib
+import inspect
+import json
+import logging
+from collections import defaultdict
+from collections.abc import Awaitable, Callable
+
+from aiohttp import ClientSession, ClientTimeout, WSMessageTypeError
+from aiohttp.client_exceptions import (
+    ClientConnectorError,
+    ClientOSError,
+    ServerTimeoutError,
+)
+from inflection import underscore
+
+from beoremote_halo.const import WEBSOCKET_TIMEOUT
+from beoremote_halo.helpers import update_button
+from beoremote_halo.models import (
+    BaseConfiguration,
+    BaseWebSocketResponse,
+    ButtonEvent,
+    Configuration,
+    Event,
+    EventType,
+    PowerEvent,
+    StatusEvent,
+    SystemEvent,
+    Update,
+    UpdateButton,
+    WheelEvent,
+)
+
+
+class Halo:
+    """Beoremote Halo client."""
+
+    def __init__(
+        self,
+        host: str,
+        configuration: BaseConfiguration | None = None,
+    ) -> None:
+        """Initialize Halo client.
+
+        Args:
+            host: IPv4 address.
+            configuration: Halo configuration. Defaults to `BaseConfiguration(Configuration([]))`.
+
+        """
+        self.host = host
+        self.websocket_connected = False
+        self.websocket_reconnect = False
+
+        if configuration is None:
+            configuration = BaseConfiguration(Configuration([]))
+
+        self._configuration = configuration
+
+        self._websocket_active = False
+        self._websocket_task: asyncio.Task
+        self._queue: asyncio.Queue[str] = asyncio.Queue()
+        self._on_connection_lost: Callable[[None], Awaitable[None] | None] | None = None
+        self._on_connection: Callable[[None], Awaitable[None] | None] | None = None
+
+        self._on_all_events: Callable | None = None
+        self._on_all_events_raw: Callable | None = None
+
+        self._event_callbacks: dict[str, Callable | None] = defaultdict()
+        self._event_callbacks.default_factory = lambda: None
+
+        self._logger = logging.getLogger(__name__)
+
+    def _send_data(self, data: BaseConfiguration | Update) -> bool:
+        """Send data to the Beoremote Halo.
+
+        Args:
+            data: `Configuration` or `Update`.
+
+        Returns:
+            If the data was successfully put into WebSocket queue.
+
+        """
+        try:
+            self._queue.put_nowait(str(data.to_json()))
+        except (asyncio.QueueFull, asyncio.QueueShutDown) as e:
+            self._logger.debug("Unable to send data: %s with error: %s", data, e)
+            return False
+        else:
+            return True
+
+    @property
+    def configuration(self) -> BaseConfiguration:
+        """Get configuration."""
+        return self._configuration
+
+    async def set_configuration(self, configuration: BaseConfiguration | None, send_configuration: bool = True) -> bool:
+        """Set configuration.
+
+        Setting configuration to be `None` will set the configuration to be `BaseConfiguration(Configuration([]))`.
+
+        Args:
+            configuration: Configuration to set/send.
+            send_configuration: Send configuration to Halo. Requires WebSocket connection to be active.. Defaults to True.
+
+        Returns:
+            If the configuration was successfully put into WebSocket queue.
+
+        """
+        self._configuration = BaseConfiguration(Configuration([])) if configuration is None else configuration
+
+        if send_configuration:
+            return self._send_data(self._configuration)
+        return False
+
+    async def update(self, update: Update, update_configuration: bool = True) -> bool:
+        """Send update to Halo. Requires WebSocket connection to be active.
+
+        Args:
+            update: Update event to be sent.
+            update_configuration: If the configuration should be modified with passed `UpdateButton` values. Defaults to True.
+
+        Returns:
+            If the update was successfully put into WebSocket queue.
+
+        """
+        if update_configuration and isinstance(update.update, UpdateButton):
+            # Update button in configuration
+            update_button(
+                self._configuration,
+                update.update.id,
+                state=update.update.state,
+                value=update.update.value,
+                title=update.update.title,
+                subtitle=update.update.subtitle,
+                content=update.update.content,
+            )
+
+        return self._send_data(update)
+
+    async def check_device_connection(self, raise_error: bool = False) -> bool:
+        """Check WebSocket connection.
+
+        Args:
+            raise_error: Raise any errors. Defaults to False.
+
+        Returns:
+            Connection successful
+
+        """
+        try:
+            async with (
+                ClientSession(timeout=ClientTimeout(connect=WEBSOCKET_TIMEOUT)) as session,
+                session.ws_connect(f"ws://{self.host}:8080/") as websocket,
+            ):
+                if await websocket.receive():
+                    return True
+        except (
+            ClientConnectorError,
+            ClientOSError,
+            ServerTimeoutError,
+            WSMessageTypeError,
+        ):
+            if raise_error:
+                raise
+            self._logger.exception("Unable to connect to %s", self.host)
+            return False
+
+    async def connect(self, reconnect: bool = False, send_configuration: bool = True) -> None:
+        """Start WebSocket connection.
+
+        Will start listening for events and allow updates to be sent.
+
+        Args:
+            reconnect: Whether or not to reconnect. Defaults to False.
+            send_configuration: Whether to automatically send configuration on connect/reconnect. Defaults to True.
+
+        """
+        self.websocket_reconnect = reconnect
+
+        if not self._websocket_active:
+            self._websocket_task = asyncio.create_task(
+                coro=self._websocket_connection(f"ws://{self.host}:8080/", send_configuration),
+                name=f"{self.host} - task",
+            )
+
+            self._websocket_active = True
+        else:
+            self._logger.error("WebSocket task already active")
+
+    async def disconnect(self) -> None:
+        """Stop WebSocket connection."""
+        # Empty queue
+        while self._queue.empty() is not True:
+            self._queue.get_nowait()
+
+        self._websocket_active = False
+        self._websocket_task.cancel()
+
+    async def _websocket_connection(self, host: str, send_configuration: bool = True) -> None:
+        """WebSocket connection handler.
+
+        Args:
+            host: IPV4 address to connect to.
+            send_configuration: Whether to automatically send configuration on connect/reconnect. Defaults to True.
+
+        """
+        while True:
+            try:
+                async with (
+                    ClientSession(timeout=ClientTimeout(connect=WEBSOCKET_TIMEOUT)) as session,
+                    # Increase heartbeat time to handle slow pongs better
+                    session.ws_connect(url=host, heartbeat=WEBSOCKET_TIMEOUT * 2) as websocket,
+                ):
+                    self.websocket_connected = True
+
+                    # Send configuration
+                    if send_configuration:
+                        self._send_data(self._configuration)
+
+                    if self._on_connection:
+                        await self._trigger_callback(self._on_connection)
+
+                    while self._websocket_active:
+                        # Receive events
+                        with contextlib.suppress(asyncio.TimeoutError):
+                            event = await websocket.receive_str(timeout=0.1)
+                            await self._on_message(event)
+
+                        # Send updates
+                        if not self._queue.empty():
+                            await websocket.send_str(self._queue.get_nowait())
+
+                    self.websocket_connected = False
+                    await websocket.close()
+                    return
+
+            except (
+                ClientConnectorError,
+                ClientOSError,
+                TypeError,
+                ServerTimeoutError,
+                WSMessageTypeError,
+            ) as error:
+                if self.websocket_connected:
+                    self._logger.debug("%s : %s - %s", host, type(error), error)
+                    self.websocket_connected = False
+
+                    if self._on_connection_lost:
+                        await self._trigger_callback(self._on_connection_lost)
+
+                if not self.websocket_reconnect:
+                    self._logger.exception("Lost connection to %s", host)
+                    await self.disconnect()
+                    return
+
+                await asyncio.sleep(WEBSOCKET_TIMEOUT)
+
+    async def _on_message(self, event: str) -> None:
+        """Handle WebSocket events."""
+        # Get the object type and deserialized object.
+        try:
+            deserialized_data = Event.from_json(event).event
+        except (ValueError, AttributeError):
+            self._logger.exception("%s unable to deserialize WebSocket event: %s", self.host, event)
+            return
+
+        # Handle all events if defined
+        if self._on_all_events:
+            await self._trigger_callback(
+                self._on_all_events,
+                deserialized_data,
+                underscore(deserialized_data.type),
+            )
+
+        if self._on_all_events_raw:
+            await self._trigger_callback(self._on_all_events_raw, json.loads(event))
+
+        # Handle specific events if defined
+        triggered_event = self._event_callbacks[deserialized_data.type]
+
+        if triggered_event:
+            await self._trigger_callback(triggered_event, deserialized_data)
+
+    async def _trigger_callback(
+        self,
+        callback: Callable,
+        *args: BaseWebSocketResponse | dict | str | EventType,
+    ) -> None:
+        """Trigger async or sync callback correctly."""
+        if inspect.iscoroutinefunction(callback):
+            await callback(*args)
+        else:
+            callback(*args)
+
+    def get_on_connection_lost(self, on_connection_lost: Callable) -> None:
+        """Set callback for WebSocket connection lost."""
+        self._on_connection_lost = on_connection_lost
+
+    def get_on_connection(self, on_connection: Callable) -> None:
+        """Set callback for WebSocket connection."""
+        self._on_connection = on_connection
+
+    def get_all_events(
+        self,
+        on_all_events: Callable[[EventType, str], Awaitable[None] | None],
+    ) -> None:
+        """Set callback for all events."""
+        self._on_all_events = on_all_events
+
+    def get_all_events_raw(
+        self,
+        on_all_events_raw: Callable[[BaseWebSocketResponse], Awaitable[None] | None],
+    ) -> None:
+        """Set callback for all events as dict."""
+        self._on_all_events_raw = on_all_events_raw
+
+    def get_wheel_event(self, on_wheel_event: Callable[[WheelEvent], Awaitable[None] | None]) -> None:
+        """Set callback for WheelEvent."""
+        self._event_callbacks["wheel"] = on_wheel_event
+
+    def get_system_event(self, on_system_event: Callable[[SystemEvent], Awaitable[None] | None]) -> None:
+        """Set callback for SystemEvent."""
+        self._event_callbacks["system"] = on_system_event
+
+    def get_status_event(self, on_status_event: Callable[[StatusEvent], Awaitable[None] | None]) -> None:
+        """Set callback for StatusEvent."""
+        self._event_callbacks["status"] = on_status_event
+
+    def get_power_event(self, on_power_event: Callable[[PowerEvent], Awaitable[None] | None]) -> None:
+        """Set callback for PowerEvent."""
+        self._event_callbacks["power"] = on_power_event
+
+    def get_button_event(self, on_button_event: Callable[[ButtonEvent], Awaitable[None] | None]) -> None:
+        """Set callback for ButtonEvent."""
+        self._event_callbacks["button"] = on_button_event
