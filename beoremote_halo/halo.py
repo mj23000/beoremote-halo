@@ -42,8 +42,6 @@ from beoremote_halo.models import (
     WheelEvent,
 )
 
-HaloWebSocketError = ClientConnectorError | ClientOSError | ServerTimeoutError | WSMessageTypeError
-
 
 class Halo:
     """Beoremote Halo client."""
@@ -167,7 +165,7 @@ class Halo:
             ):
                 if await websocket.receive():
                     return True
-        except HaloWebSocketError:
+        except (ClientConnectorError, ClientOSError, ServerTimeoutError, WSMessageTypeError):
             if raise_error:
                 raise
             self._logger.exception("Unable to connect to %s", self.host)
@@ -242,7 +240,7 @@ class Halo:
                     await websocket.close()
                     return
 
-            except (HaloWebSocketError, TypeError) as error:
+            except (ClientConnectorError, ClientOSError, ServerTimeoutError, TypeError, WSMessageTypeError) as error:
                 if self.websocket_connected:
                     self._logger.debug("%s : %s - %s", host, type(error), error)
                     self.websocket_connected = False
