@@ -20,7 +20,7 @@ def clamp_button_value(value: float) -> int:
         Clamped value.
 
     """
-    return max(MIN_VALUE, min(value, MAX_VALUE))
+    return max(MIN_VALUE, min(int(value), MAX_VALUE))
 
 
 def interpolate_button_value(value: float, min_value: float, max_value: float) -> int:

@@ -34,7 +34,7 @@ repository = "https://github.com/bang-olufsen/beoremote-halo"
 halo_api = "halo_api.halo_cli:HaloApiCli"
 
 [dependency-groups]
-dev = ["ruff>=0.15.13", "ty>=0.0.37"]
+dev = ["prek>=0.4.1", "ruff==0.15.13", "ty==0.0.38"]
 
 
 [build-system]
@@ -48,3 +48,6 @@ line-length = 140
 [tool.ruff.lint]
 select = ["ALL"]
 ignore = ["FBT001", "FBT002", "FBT003", "PLR0913"]
+
+[tool.uv.build-backend]
+module-root = ""

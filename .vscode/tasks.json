@@ -1,0 +1,13 @@
+{
+  // See https://go.microsoft.com/fwlink/?LinkId=733558
+  // for the documentation about the tasks.json format
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build documentation",
+      "type": "shell",
+      "command": "asyncapi generate fromTemplate beoremote-halo-spec.yaml @asyncapi/html-template@3.5.6 -o ./docs --use-new-generator -p singleFile=true --force-write favicon='./docs/favicon.ico'",
+      "problemMatcher": []
+    }
+  ]
+}

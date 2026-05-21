@@ -1,6 +1,15 @@
 """Halo client."""
 
 import asyncio
+import sys
+
+# Add support for "older" Python versions
+if sys.version_info >= (3, 13):
+    QueueExceptions = asyncio.QueueFull | asyncio.QueueShutDown
+else:
+    QueueExceptions = asyncio.QueueFull
+
+
 import contextlib
 import inspect
 import json
@@ -32,6 +41,8 @@ from beoremote_halo.models import (
     UpdateButton,
     WheelEvent,
 )
+
+HaloWebSocketError = ClientConnectorError | ClientOSError | ServerTimeoutError | WSMessageTypeError
 
 
 class Halo:
@@ -84,7 +95,7 @@ class Halo:
         """
         try:
             self._queue.put_nowait(str(data.to_json()))
-        except (asyncio.QueueFull, asyncio.QueueShutDown) as e:
+        except QueueExceptions as e:
             self._logger.debug("Unable to send data: %s with error: %s", data, e)
             return False
         else:
@@ -156,12 +167,7 @@ class Halo:
             ):
                 if await websocket.receive():
                     return True
-        except (
-            ClientConnectorError,
-            ClientOSError,
-            ServerTimeoutError,
-            WSMessageTypeError,
-        ):
+        except HaloWebSocketError:
             if raise_error:
                 raise
             self._logger.exception("Unable to connect to %s", self.host)
@@ -236,13 +242,7 @@ class Halo:
                     await websocket.close()
                     return
 
-            except (
-                ClientConnectorError,
-                ClientOSError,
-                TypeError,
-                ServerTimeoutError,
-                WSMessageTypeError,
-            ) as error:
+            except (HaloWebSocketError, TypeError) as error:
                 if self.websocket_connected:
                     self._logger.debug("%s : %s - %s", host, type(error), error)
                     self.websocket_connected = False
