@@ -9,14 +9,14 @@ info:
 
     ### Client Connection
     * Upon client connection to http socket 8080, a websocket upgrade request is required.
-    * Throught the websocket connection the client must send a configuration
+    * Through the websocket connection the client must send a configuration
     * Beoremote Halo will remain configured as long as a client is connected. In the event of a disconnect, the client must reconnect and resend the configuration.
     * If a client connects to Beoremote Halo while a websocket connection is active, the current websocket connection is closed and the new client is able to perform a websocket upgrade.
 
     ### Update Flow
     * Client configures Beoremote Halo
     * The client can update the elements in the configuration passed to Beoremote Halo.
-    * Updates are cached on Beoremote Halo, and some updates tempoaraly changed the behaviour of Beoremote Halo e.g. Uupdate Display Page.
+    * Updates are cached on Beoremote Halo, and some updates temporarily changes the behaviour of Beoremote Halo e.g. Update Display Page.
 
     ### Event Flow
     * Halo sends Event notifications upon user interaction; system, status, power, button, and wheel events.
