@@ -1,8 +1,12 @@
 # pull image
-FROM alpine:3.22.4
+FROM debian:13.5-slim
 
-RUN apk update
-RUN apk add uv git bash npm
+RUN apt update && apt upgrade -y
+RUN apt install git npm curl -y
 
+# Install uv
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Install AsyncAPI generator
 RUN npm install -g @asyncapi/cli@4.1.1
 RUN asyncapi config analytics --disable

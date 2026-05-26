@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Install development dependencies
-apk add shellcheck
+apt install shellcheck -y
 
 # Install Python dependencies
 uv sync --dev
