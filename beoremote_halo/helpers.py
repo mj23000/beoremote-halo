@@ -83,12 +83,11 @@ def delete_page(configuration: BaseConfiguration, id_: UUID) -> None:
 def get_button_indices(configuration: BaseConfiguration, id_: UUID) -> tuple[int, int]:
     """Get `Page` and `Button` indices in configuration from `Button` ID.
 
-    Raises:
-        ValueError: `Button` ID can't be found in configuration.
-
     Returns:
-        `Page` index, `Button` index.
+        `Page` index, `Button` index
 
+    Raises:
+        ValueError: `Button` ID can't be found in configuration
     """
     for page_idx, page in enumerate(configuration.configuration.pages):
         for button_idx, button in enumerate(page.buttons):
@@ -101,12 +100,11 @@ def get_button_indices(configuration: BaseConfiguration, id_: UUID) -> tuple[int
 def get_page_index(configuration: BaseConfiguration, id_: UUID) -> int:
     """Get `Page` index in configuration from `Page` ID.
 
-    Raises:
-        ValueError: `Page` ID can't be found in configuration.
-
     Returns:
-        `Page` index.
+        `Page` index
 
+    Raises:
+        ValueError: `Page` ID can't be found in configuration
     """
     for page_idx, page in enumerate(configuration.configuration.pages):
         if page.id_ == id_:
@@ -118,12 +116,11 @@ def get_page_index(configuration: BaseConfiguration, id_: UUID) -> int:
 def get_page_from_id(configuration: BaseConfiguration, id_: UUID) -> Page:
     """Get `Page` in configuration from `Page` ID.
 
-    Raises:
-        ValueError: `Page` ID can't be found in configuration.
-
     Returns:
-        `Page`.
+        `Page`
 
+    Raises:
+        ValueError: `Page` ID can't be found in configuration
     """
     for page in configuration.configuration.pages:
         if page.id_ == id_:
@@ -135,12 +132,11 @@ def get_page_from_id(configuration: BaseConfiguration, id_: UUID) -> Page:
 def get_button_from_id(configuration: BaseConfiguration, id_: UUID) -> Button:
     """Get `Button` in configuration from `Button` ID.
 
-    Raises:
-        ValueError: If the button can't be found.
-
     Returns:
-        `Button`.
+        `Button`
 
+    Raises:
+        ValueError: If the button can't be found
     """
     for page in configuration.configuration.pages:
         for button in page.buttons:
@@ -154,8 +150,7 @@ def get_default_button(configuration: BaseConfiguration) -> Button | None:
     """Get the default `Button` from configuration if available.
 
     Returns:
-        `Button` or None.
-
+        `Button` or None
     """
     for page in configuration.configuration.pages:
         for button in page.buttons:
@@ -168,7 +163,6 @@ def get_all_buttons(configuration: BaseConfiguration) -> list[Button]:
     """Get all `Button`s from all pages in configuration.
 
     Returns:
-        List of `Button`s.
-
+        List of `Button`s
     """
     return [button for page in configuration.configuration.pages for button in page.buttons]

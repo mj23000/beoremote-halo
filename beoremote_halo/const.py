@@ -26,7 +26,7 @@ BUTTON_SUBTITLE_MAX_LENGTH: Final = 15
 
 # These are approximate numbers. 44 and 62 are closer to the "limit" before formatting starts to break
 PAGE_TITLE_MAX_LENGTH: Final = 40
-NOTIFICATION_SUBTITLE_MAX_LENGTH: Final = 250
+NOTIFICATION_SUBTITLE_MAX_LENGTH: Final = 350
 NOTIFICATION_SUBTITLE_MAX_LINE_LENGTH: Final = 60
 NOTIFICATION_SUBTITLE_MAX_LINES: Final = 5
 

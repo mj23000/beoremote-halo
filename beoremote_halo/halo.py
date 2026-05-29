@@ -54,9 +54,8 @@ class Halo:
         """Initialize Halo client.
 
         Args:
-            host: IPv4 address.
-            configuration: Halo configuration. Defaults to `BaseConfiguration(Configuration([]))`.
-
+            host: IPv4 address
+            configuration: Halo configuration. Defaults to `BaseConfiguration(Configuration([]))` if set to None
         """
         self.host = host
         self.websocket_connected = False
@@ -85,11 +84,10 @@ class Halo:
         """Send data to the Beoremote Halo.
 
         Args:
-            data: `Configuration` or `Update`.
+            data: `Configuration` or `Update` to send
 
         Returns:
-            If the data was successfully put into WebSocket queue.
-
+            If the data was successfully put into WebSocket queue
         """
         try:
             self._queue.put_nowait(str(data.to_json()))
@@ -110,12 +108,11 @@ class Halo:
         Setting configuration to be `None` will set the configuration to be `BaseConfiguration(Configuration([]))`.
 
         Args:
-            configuration: Configuration to set/send.
-            send_configuration: Send configuration to Halo. Requires WebSocket connection to be active.. Defaults to True.
+            configuration: Configuration to set/send
+            send_configuration: Send configuration to Halo. Requires WebSocket connection to be active. Defaults to True
 
         Returns:
-            If the configuration was successfully put into WebSocket queue.
-
+            If the configuration was successfully put into WebSocket queue
         """
         self._configuration = BaseConfiguration(Configuration(pages=[])) if configuration is None else configuration
 
@@ -127,12 +124,11 @@ class Halo:
         """Send update to Halo. Requires WebSocket connection to be active.
 
         Args:
-            update: Update event to be sent.
-            update_configuration: If the configuration should be modified with passed `UpdateButton` values. Defaults to True.
+            update: Update event to be sent
+            update_configuration: If the configuration should be modified with passed `UpdateButton` values. Defaults to True
 
         Returns:
-            If the update was successfully put into WebSocket queue.
-
+            If the update was successfully put into WebSocket queue
         """
         if update_configuration and isinstance(update.update, UpdateButton):
             # Update button in configuration
@@ -152,11 +148,16 @@ class Halo:
         """Check WebSocket connection.
 
         Args:
-            raise_error: Raise any errors. Defaults to False.
+            raise_error: Raise any errors. Defaults to False
 
         Returns:
             Connection successful
 
+        Raises:
+            ClientConnectorError: Error connecting and receiving from WebSocket
+            ClientOSError: Error connecting and receiving from WebSocket
+            ServerTimeoutError: Error connecting and receiving from WebSocket
+            WSMessageTypeError: Error connecting and receiving from WebSocket
         """
         try:
             async with (
@@ -177,9 +178,8 @@ class Halo:
         Will start listening for events and allow updates to be sent.
 
         Args:
-            reconnect: Whether or not to reconnect. Defaults to False.
-            send_configuration: Whether to automatically send configuration on connect/reconnect. Defaults to True.
-
+            reconnect: Whether or not to reconnect. Defaults to False
+            send_configuration: Whether to automatically send configuration on connect/reconnect. Defaults to True
         """
         self.websocket_reconnect = reconnect
 
@@ -206,9 +206,8 @@ class Halo:
         """WebSocket connection handler.
 
         Args:
-            host: IPV4 address to connect to.
-            send_configuration: Whether to automatically send configuration on connect/reconnect. Defaults to True.
-
+            host: IPV4 address to connect to
+            send_configuration: Whether to automatically send configuration on connect/reconnect. Defaults to True
         """
         while True:
             try:
@@ -281,11 +280,8 @@ class Halo:
         if triggered_event:
             await self._trigger_callback(triggered_event, deserialized_data)
 
-    async def _trigger_callback(
-        self,
-        callback: Callable,
-        *args: BaseWebSocketResponse | dict | str | EventType,
-    ) -> None:
+    @staticmethod
+    async def _trigger_callback(callback: Callable, *args: BaseWebSocketResponse | dict | str | EventType) -> None:
         """Trigger async or sync callback correctly."""
         if inspect.iscoroutinefunction(callback):
             await callback(*args)

@@ -27,7 +27,7 @@ from beoremote_halo.const import (
 _LOGGER = logging.getLogger(__name__)
 
 
-class HaloMixin(DataClassJSONMixin):
+class _HaloMixin(DataClassJSONMixin):
     """Configuration for Beoremote Halo dataclasses."""
 
     class Config(BaseConfig):
@@ -38,10 +38,12 @@ class HaloMixin(DataClassJSONMixin):
 
 
 @dataclass
-class HaloIdMixin:
+class _HaloIdMixin:
     """Mixin for Beoremote Halo dataclasses that contain an ID."""
 
-    id_: UUID = field(default_factory=uuid1, metadata=field_options(alias="id"))
+    # This is kw_only to ensure that it is placed at the end of constructor's of classes
+    # that inherit from this one. This ensures
+    id_: UUID = field(default_factory=uuid1, metadata=field_options(alias="id"), kw_only=True)
 
 
 class UpdateTypes(StrEnum):
@@ -141,14 +143,14 @@ class Icons(StrEnum):
 
 
 @dataclass
-class Icon(HaloMixin):
+class Icon(_HaloMixin):
     """Icon to be shown inside of a `Button`."""
 
     icon: Icons
 
 
 @dataclass
-class Text(HaloMixin):
+class Text(_HaloMixin):
     """Text to be shown inside of a `Button`."""
 
     text: str
@@ -162,8 +164,8 @@ class ButtonState(StrEnum):
 
 
 @dataclass
-class Button(HaloMixin, HaloIdMixin):
-    """An interactable element that represents an action or physical device.
+class Button(_HaloMixin, _HaloIdMixin):
+    """An interact-able element that represents an action or physical device.
 
     Contains a title, content (either an icon or text), subtitle, value, state and if it is the default.
     `Button`s marked as default will be preselected when interacting with the Halo.
@@ -181,14 +183,18 @@ class Button(HaloMixin, HaloIdMixin):
     default: bool | None = False
 
     def __post_init__(self) -> None:
-        """Ensure value is in a valid range."""
+        """Ensure value is in a valid range.
+
+        Raises:
+            ValueError: Invalid button value
+        """
         if self.value is not None and (self.value < MIN_VALUE or self.value > MAX_VALUE):
             msg = f"Invalid button value: {self.value}. Button value must be in the range: {MIN_VALUE}-{MAX_VALUE}"
             raise ValueError(msg)
 
 
 @dataclass
-class Page(HaloMixin, HaloIdMixin):
+class Page(_HaloMixin, _HaloIdMixin):
     """Group of `Button` elements grouped with a title in the `Configuration`.
 
     Contains a title, a list of buttons and an id.
@@ -201,7 +207,11 @@ class Page(HaloMixin, HaloIdMixin):
     buttons: list[Button]
 
     def __post_init__(self) -> None:
-        """Ensure page is valid."""
+        """Ensure page is valid.
+
+        Raises:
+            ValueError: Invalid number of buttons
+        """
         # Ensure that there are  0-8 buttons.
         number_of_buttons = len(self.buttons)
         if number_of_buttons < MIN_BUTTONS or number_of_buttons > MAX_BUTTONS:
@@ -210,7 +220,7 @@ class Page(HaloMixin, HaloIdMixin):
 
 
 @dataclass
-class Configuration(HaloMixin, HaloIdMixin):
+class Configuration(_HaloMixin, _HaloIdMixin):
     """Main Configuration class.
 
     Contains a list of pages, the version of the API client and an ID.
@@ -224,7 +234,11 @@ class Configuration(HaloMixin, HaloIdMixin):
     version: str = VERSION
 
     def __post_init__(self) -> None:
-        """Ensure configuration is valid."""
+        """Ensure configuration is valid.
+
+        Raises:
+            ValueError: Multiple default buttons defined or invalid number of pages
+        """
         # Ensure that at most one Button is marked as default.
         default_buttons: list[Button] = []
         for page in self.pages:
@@ -237,12 +251,12 @@ class Configuration(HaloMixin, HaloIdMixin):
         # Ensure that there are 0-3 pages.
         number_of_pages = len(self.pages)
         if number_of_pages < MIN_PAGES or number_of_pages > MAX_PAGES:
-            msg_0 = f"Invalid number of pages: {number_of_pages}. Only {MIN_PAGES}-{MAX_PAGES} pages are allowed per configuration."
-            raise ValueError(msg_0)
+            msg = f"Invalid number of pages: {number_of_pages}. Only {MIN_PAGES}-{MAX_PAGES} pages are allowed per configuration."
+            raise ValueError(msg)
 
 
 @dataclass
-class BaseConfiguration(HaloMixin):
+class BaseConfiguration(_HaloMixin):
     """Root configuration class.
 
     Contains the main configuration class.
@@ -259,7 +273,7 @@ class ButtonEventState(StrEnum):
 
 
 @dataclass
-class ButtonEvent(HaloMixin, HaloIdMixin):
+class ButtonEvent(_HaloMixin, _HaloIdMixin):
     """Button event received from the Halo.
 
     Contains the ID and the (new) state of the button.
@@ -281,7 +295,7 @@ class PowerEventState(StrEnum):
 
 
 @dataclass
-class PowerEvent(HaloMixin):
+class PowerEvent(_HaloMixin):
     """Power event received from the Halo.
 
     Contains the battery capacity and the (new) power state.
@@ -300,7 +314,7 @@ class StatusEventState(StrEnum):
 
 
 @dataclass
-class StatusEvent(HaloMixin):
+class StatusEvent(_HaloMixin):
     """Status event received from the Halo.
 
     Contains a message and state.
@@ -337,7 +351,7 @@ class SystemEventState(StrEnum):
 
 
 @dataclass
-class SystemEvent(HaloMixin):
+class SystemEvent(_HaloMixin):
     """System event received from the Halo.
 
     Contains state describing state of the system.
@@ -348,7 +362,7 @@ class SystemEvent(HaloMixin):
 
 
 @dataclass
-class WheelEvent(HaloMixin, HaloIdMixin):
+class WheelEvent(_HaloMixin, _HaloIdMixin):
     """Wheel event received from the Halo.
 
     Contains id of button and momentum-affected counts value with value range -5..5.
@@ -358,19 +372,19 @@ class WheelEvent(HaloMixin, HaloIdMixin):
     The momentum of the wheel can also be determined by the counts value: 1 -> slow clockwise movement, 5 -> very fast clockwise movement.
     """
 
-    counts: int
+    counts: Literal[-5, -4, -3, -2, -1, 1, 2, 3, 4, 5]
     type_: Literal[EventTypes.WHEEL] = field(default=EventTypes.WHEEL, metadata=field_options(alias="type"))
 
 
 @dataclass
-class Event(HaloMixin):
+class Event(_HaloMixin):
     """Base Event class."""
 
     event: WheelEvent | SystemEvent | StatusEvent | PowerEvent | ButtonEvent
 
 
 @dataclass
-class UpdateButton(HaloMixin, HaloIdMixin):
+class UpdateButton(_HaloMixin, _HaloIdMixin):
     """Button update to be sent to the Halo.
 
     Contains all defined button attributes
@@ -386,14 +400,18 @@ class UpdateButton(HaloMixin, HaloIdMixin):
     type_: Literal[UpdateTypes.BUTTON] = field(default=UpdateTypes.BUTTON, metadata=field_options(alias="type"))
 
     def __post_init__(self) -> None:
-        """Ensure value is in a valid range."""
+        """Ensure value is in a valid range.
+
+        Raises:
+            ValueError: Invalid button value
+        """
         if self.value is not None and (self.value < MIN_VALUE or self.value > MAX_VALUE):
             msg = f"Invalid button value: {self.value}. Button value must be in the range: {MIN_VALUE}-{MAX_VALUE}"
             raise ValueError(msg)
 
 
 @dataclass
-class UpdateDisplayPage(HaloMixin):
+class UpdateDisplayPage(_HaloMixin):
     """Display a specific `Page` and `Button`.
 
     Contains page and button id.
@@ -407,7 +425,7 @@ class UpdateDisplayPage(HaloMixin):
 
 
 @dataclass
-class UpdateNotification(HaloMixin, HaloIdMixin):
+class UpdateNotification(_HaloMixin, _HaloIdMixin):
     """Display a notification message.
 
     Sending this will make the Halo show a notification box with the defined title and message.
@@ -454,7 +472,7 @@ class UpdateNotification(HaloMixin, HaloIdMixin):
 
 
 @dataclass
-class Update(HaloMixin):
+class Update(_HaloMixin):
     """An update to be sent to the Beoremote Halo."""
 
     update: UpdateButton | UpdateDisplayPage | UpdateNotification

@@ -51,10 +51,36 @@ build-backend = "uv_build"
 [tool.ruff]
 line-length = 140
 
-[tool.ruff.lint]
-select = ["ALL"]
-ignore = ["FBT001", "FBT002", "FBT003", "PLR0913", "D203", "D213"]
+[tool.ruff.format]
+preview = true
 
+[tool.ruff.lint]
+preview = true
+
+select = [
+    "ALL",
+    "DOC102",
+    "DOC201",
+    "DOC202",
+    "DOC402",
+    "DOC403",
+    "DOC501",
+    "DOC502",
+]
+ignore = [
+    "FBT001",
+    "FBT002",
+    "FBT003",
+    "PLR0913",
+    "D203",
+    "D213",
+    "CPY001",
+    "D413",
+    "PLR0917",
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101"]
