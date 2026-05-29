@@ -63,7 +63,7 @@ class Halo:
         self.websocket_reconnect = False
 
         if configuration is None:
-            configuration = BaseConfiguration(Configuration([]))
+            configuration = BaseConfiguration(Configuration(pages=[]))
 
         self._configuration = configuration
 
@@ -117,7 +117,7 @@ class Halo:
             If the configuration was successfully put into WebSocket queue.
 
         """
-        self._configuration = BaseConfiguration(Configuration([])) if configuration is None else configuration
+        self._configuration = BaseConfiguration(Configuration(pages=[])) if configuration is None else configuration
 
         if send_configuration:
             return self._send_data(self._configuration)
@@ -138,7 +138,7 @@ class Halo:
             # Update button in configuration
             update_button(
                 self._configuration,
-                update.update.id,
+                update.update.id_,
                 state=update.update.state,
                 value=update.update.value,
                 title=update.update.title,
@@ -269,14 +269,14 @@ class Halo:
             await self._trigger_callback(
                 self._on_all_events,
                 deserialized_data,
-                underscore(deserialized_data.type),
+                underscore(deserialized_data.type_),
             )
 
         if self._on_all_events_raw:
             await self._trigger_callback(self._on_all_events_raw, json.loads(event))
 
         # Handle specific events if defined
-        triggered_event = self._event_callbacks[deserialized_data.type]
+        triggered_event = self._event_callbacks[deserialized_data.type_]
 
         if triggered_event:
             await self._trigger_callback(triggered_event, deserialized_data)

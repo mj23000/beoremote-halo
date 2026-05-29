@@ -1,5 +1,7 @@
 """Various helpers for configuration manipulation."""
 
+from uuid import UUID
+
 from beoremote_halo.models import BaseConfiguration, Button, ButtonState, Icon, Page, Text
 
 
@@ -7,18 +9,18 @@ from beoremote_halo.models import BaseConfiguration, Button, ButtonState, Icon, 
 def clear_default_button(configuration: BaseConfiguration) -> None:
     """Remove the default flag from a configuration if present."""
     if (button := get_default_button(configuration)) is not None:
-        set_default_button(configuration, button.id, False)
+        set_default_button(configuration, button.id_, False)
 
 
-def set_default_button(configuration: BaseConfiguration, button_id: str, default: bool) -> None:
+def set_default_button(configuration: BaseConfiguration, id_: UUID, default: bool) -> None:
     """Set the default flag for a `Button` in a configuration."""
-    page_idx, button_idx = get_button_indices(configuration, button_id)
+    page_idx, button_idx = get_button_indices(configuration, id_)
     configuration.configuration.pages[page_idx].buttons[button_idx].default = default
 
 
 def update_button(
     configuration: BaseConfiguration,
-    button_id: str,
+    id_: UUID,
     title: str | None = None,
     content: Icon | Text | None = None,
     subtitle: str | None = None,
@@ -31,7 +33,7 @@ def update_button(
     Attributes that are set to `None` are left unmodified.
     """
     # Get button's indices to modify values in configuration
-    page_idx, button_idx = get_button_indices(configuration, button_id)
+    page_idx, button_idx = get_button_indices(configuration, id_)
 
     if title is not None:
         configuration.configuration.pages[page_idx].buttons[button_idx].title = title
@@ -49,7 +51,7 @@ def update_button(
 
 def update_page(
     configuration: BaseConfiguration,
-    page_id: str,
+    id_: UUID,
     title: str | None = None,
     buttons: list[Button] | None = None,
 ) -> None:
@@ -58,7 +60,7 @@ def update_page(
     Attributes that are set to `None` are left unmodified.
     """
     # Get page index
-    page_idx = get_page_index(configuration, page_id)
+    page_idx = get_page_index(configuration, id_)
 
     if title is not None:
         configuration.configuration.pages[page_idx].title = title
@@ -66,19 +68,19 @@ def update_page(
         configuration.configuration.pages[page_idx].buttons = buttons
 
 
-def delete_button(configuration: BaseConfiguration, button_id: str) -> None:
+def delete_button(configuration: BaseConfiguration, id_: UUID) -> None:
     """Delete a `Button` from a configuration."""
-    page_idx, button_idx = get_button_indices(configuration, button_id)
+    page_idx, button_idx = get_button_indices(configuration, id_)
     configuration.configuration.pages[page_idx].buttons.pop(button_idx)
 
 
-def delete_page(configuration: BaseConfiguration, page_id: str) -> None:
+def delete_page(configuration: BaseConfiguration, id_: UUID) -> None:
     """Delete a `Page` from a configuration."""
-    configuration.configuration.pages.pop(get_page_index(configuration, page_id))
+    configuration.configuration.pages.pop(get_page_index(configuration, id_))
 
 
 # Configuration get helper methods
-def get_button_indices(configuration: BaseConfiguration, button_id: str) -> tuple[int, int]:
+def get_button_indices(configuration: BaseConfiguration, id_: UUID) -> tuple[int, int]:
     """Get `Page` and `Button` indices in configuration from `Button` ID.
 
     Raises:
@@ -90,13 +92,13 @@ def get_button_indices(configuration: BaseConfiguration, button_id: str) -> tupl
     """
     for page_idx, page in enumerate(configuration.configuration.pages):
         for button_idx, button in enumerate(page.buttons):
-            if button.id == button_id:
+            if button.id_ == id_:
                 return (page_idx, button_idx)
-    msg = f"Unable to get indices for: {button_id}"
+    msg = f"Unable to get indices for: {id_}"
     raise ValueError(msg)
 
 
-def get_page_index(configuration: BaseConfiguration, page_id: str) -> int:
+def get_page_index(configuration: BaseConfiguration, id_: UUID) -> int:
     """Get `Page` index in configuration from `Page` ID.
 
     Raises:
@@ -107,13 +109,13 @@ def get_page_index(configuration: BaseConfiguration, page_id: str) -> int:
 
     """
     for page_idx, page in enumerate(configuration.configuration.pages):
-        if page.id == page_id:
+        if page.id_ == id_:
             return page_idx
-    msg = f"Unable to get index for: {page_id}"
+    msg = f"Unable to get index for: {id_}"
     raise ValueError(msg)
 
 
-def get_page_from_id(configuration: BaseConfiguration, page_id: str) -> Page:
+def get_page_from_id(configuration: BaseConfiguration, id_: UUID) -> Page:
     """Get `Page` in configuration from `Page` ID.
 
     Raises:
@@ -124,13 +126,13 @@ def get_page_from_id(configuration: BaseConfiguration, page_id: str) -> Page:
 
     """
     for page in configuration.configuration.pages:
-        if page.id == page_id:
+        if page.id_ == id_:
             return page
     msg = f"Unable to get Page with ID: {id}"
     raise ValueError(msg)
 
 
-def get_button_from_id(configuration: BaseConfiguration, button_id: str) -> Button:
+def get_button_from_id(configuration: BaseConfiguration, id_: UUID) -> Button:
     """Get `Button` in configuration from `Button` ID.
 
     Raises:
@@ -142,9 +144,9 @@ def get_button_from_id(configuration: BaseConfiguration, button_id: str) -> Butt
     """
     for page in configuration.configuration.pages:
         for button in page.buttons:
-            if button.id == button_id:
+            if button.id_ == id_:
                 return button
-    msg = f"Unable to retrieve button with id {button_id} from configuration."
+    msg = f"Unable to retrieve button with id {id_} from configuration."
     raise ValueError(msg)
 
 
