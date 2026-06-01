@@ -151,7 +151,10 @@ class Icon(_HaloMixin):
 
 @dataclass
 class Text(_HaloMixin):
-    """Text to be shown inside of a `Button`."""
+    """Text to be shown inside of a `Button`.
+
+    `text` should be limited to 6 characters.
+    """
 
     text: str
 
@@ -170,6 +173,7 @@ class Button(_HaloMixin, _HaloIdMixin):
     Contains a title, content (either an icon or text), subtitle, value, state and if it is the default.
     `Button`s marked as default will be preselected when interacting with the Halo.
     Only a single Button can be default in a configuration.
+    `title` and `subtitle` should be limited to 15 characters.
 
     If no ID is provided, then one will be automatically generated.
     Ensures that the value is in the range 0-100.
@@ -198,6 +202,7 @@ class Page(_HaloMixin, _HaloIdMixin):
     """Group of `Button` elements grouped with a title in the `Configuration`.
 
     Contains a title, a list of buttons and an id.
+    `title` should be limited to 40 characters.
 
     If no ID is provided, then one will be automatically generated.
     Ensures that at 1-8 buttons are in a page.
@@ -214,7 +219,7 @@ class Page(_HaloMixin, _HaloIdMixin):
         """
         # Ensure that there are  0-8 buttons.
         number_of_buttons = len(self.buttons)
-        if number_of_buttons < MIN_BUTTONS or number_of_buttons > MAX_BUTTONS:
+        if number_of_buttons > MAX_BUTTONS:
             msg = f"Invalid number of buttons: {number_of_buttons}. Only {MIN_BUTTONS}-{MAX_BUTTONS} buttons are allowed in a page."
             raise ValueError(msg)
 
