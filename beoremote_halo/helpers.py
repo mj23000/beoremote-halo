@@ -2,6 +2,7 @@
 
 from uuid import UUID
 
+from beoremote_halo import MAX_VALUE, MIN_VALUE
 from beoremote_halo.models import BaseConfiguration, Button, ButtonState, Icon, Page, Text
 
 
@@ -9,13 +10,8 @@ from beoremote_halo.models import BaseConfiguration, Button, ButtonState, Icon, 
 def clear_default_button(configuration: BaseConfiguration) -> None:
     """Remove the default flag from a configuration if present."""
     if (button := get_default_button(configuration)) is not None:
-        set_default_button(configuration, button.id_, False)
-
-
-def set_default_button(configuration: BaseConfiguration, id_: UUID, default: bool) -> None:
-    """Set the default flag for a `Button` in a configuration."""
-    page_idx, button_idx = get_button_indices(configuration, id_)
-    configuration.configuration.pages[page_idx].buttons[button_idx].default = default
+        page_idx, button_idx = get_button_indices(configuration, button.id_)
+        configuration.configuration.pages[page_idx].buttons[button_idx].default = False
 
 
 def update_button(
@@ -31,6 +27,9 @@ def update_button(
     """Update a `Button`s attributes.
 
     Attributes that are set to `None` are left unmodified.
+
+    Raises:
+        ValueError: value is outside the valid range og 0-100 or multiple default buttons have been defined
     """
     # Get button's indices to modify values in configuration
     page_idx, button_idx = get_button_indices(configuration, id_)
@@ -42,10 +41,16 @@ def update_button(
     if subtitle is not None:
         configuration.configuration.pages[page_idx].buttons[button_idx].subtitle = subtitle
     if value is not None:
+        if value < MIN_VALUE or value > MAX_VALUE:
+            msg = f"Invalid button value: {value}. Button value must be in the range: {MIN_VALUE}-{MAX_VALUE}"
+            raise ValueError(msg)
         configuration.configuration.pages[page_idx].buttons[button_idx].value = value
     if state is not None:
         configuration.configuration.pages[page_idx].buttons[button_idx].state = state
     if default is not None:
+        if default is True and (button := get_default_button(configuration)) and button.id_ != id_:
+            msg = f"Default button already defined: {button}. Clear existing default button before setting new one"
+            raise ValueError(msg)
         configuration.configuration.pages[page_idx].buttons[button_idx].default = default
 
 
@@ -93,7 +98,7 @@ def get_button_indices(configuration: BaseConfiguration, id_: UUID) -> tuple[int
         for button_idx, button in enumerate(page.buttons):
             if button.id_ == id_:
                 return (page_idx, button_idx)
-    msg = f"Unable to get indices for: {id_}"
+    msg = f"Unable to get indices for Button with ID: {id_}"
     raise ValueError(msg)
 
 
@@ -109,7 +114,7 @@ def get_page_index(configuration: BaseConfiguration, id_: UUID) -> int:
     for page_idx, page in enumerate(configuration.configuration.pages):
         if page.id_ == id_:
             return page_idx
-    msg = f"Unable to get index for: {id_}"
+    msg = f"Unable to get index for Page with ID: {id_}"
     raise ValueError(msg)
 
 
@@ -125,7 +130,7 @@ def get_page_from_id(configuration: BaseConfiguration, id_: UUID) -> Page:
     for page in configuration.configuration.pages:
         if page.id_ == id_:
             return page
-    msg = f"Unable to get Page with ID: {id}"
+    msg = f"Unable to get Page with ID: {id_}"
     raise ValueError(msg)
 
 
@@ -142,7 +147,7 @@ def get_button_from_id(configuration: BaseConfiguration, id_: UUID) -> Button:
         for button in page.buttons:
             if button.id_ == id_:
                 return button
-    msg = f"Unable to retrieve button with id {id_} from configuration."
+    msg = f"Unable to get Button with ID: {id_}"
     raise ValueError(msg)
 
 

@@ -33,7 +33,6 @@ from beoremote_halo.helpers import (
     get_default_button,
     get_page_from_id,
     get_page_index,
-    set_default_button,
     update_button,
     update_page,
 )
@@ -133,7 +132,6 @@ __all__ = [
     "get_page_from_id",
     "get_page_index",
     "interpolate_button_value",
-    "set_default_button",
     "trim_button_subtitle",
     "trim_button_text",
     "trim_button_title",
