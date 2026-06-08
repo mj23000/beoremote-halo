@@ -211,7 +211,7 @@ def test_update_button(configuration: BaseConfiguration) -> None:
     """Test `update_button`."""
     assert configuration.configuration.pages[0].buttons[0] == CHANDELIER_BUTTON
     # Update all available attributes with valid values
-    new_values = Button("New title", Text("New text"), "New subtitle", 33, ButtonState.INACTIVE, default=False)
+    new_values = Button("New title", Text("New"), "New subtitle", 33, ButtonState.INACTIVE, default=False)
     update_button(
         configuration,
         CHANDELIER_BUTTON.id_,

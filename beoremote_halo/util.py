@@ -1,8 +1,8 @@
 """Various utilities for Beoremote Halo."""
 
 from beoremote_halo.const import (
+    BUTTON_CONTENT_TEXT_MAX_LENGTH,
     BUTTON_SUBTITLE_MAX_LENGTH,
-    BUTTON_TEXT_MAX_LENGTH,
     BUTTON_TITLE_MAX_LENGTH,
     MAX_VALUE,
     MIN_VALUE,
@@ -45,7 +45,7 @@ def trim_button_text(text: str) -> str:
     Returns:
         Shortened string
     """
-    return text[0:BUTTON_TEXT_MAX_LENGTH]
+    return text[0:BUTTON_CONTENT_TEXT_MAX_LENGTH]
 
 
 def trim_button_subtitle(text: str) -> str:

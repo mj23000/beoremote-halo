@@ -11,6 +11,12 @@ from mashumaro.config import BaseConfig
 from mashumaro.mixins.json import DataClassJSONMixin
 
 from beoremote_halo.const import (
+    BUTTON_CONTENT_TEXT_MAX_LENGTH,
+    BUTTON_CONTENT_TEXT_MIN_LENGTH,
+    BUTTON_SUBTITLE_MAX_LENGTH,
+    BUTTON_SUBTITLE_MIN_LENGTH,
+    BUTTON_TITLE_MAX_LENGTH,
+    BUTTON_TITLE_MIN_LENGTH,
     MAX_BUTTONS,
     MAX_PAGES,
     MAX_VALUE,
@@ -20,7 +26,11 @@ from beoremote_halo.const import (
     NOTIFICATION_SUBTITLE_MAX_LENGTH,
     NOTIFICATION_SUBTITLE_MAX_LINE_LENGTH,
     NOTIFICATION_SUBTITLE_MAX_LINES,
+    NOTIFICATION_SUBTITLE_MIN_LENGTH,
+    NOTIFICATION_SUBTITLE_MIN_LINE_LENGTH,
+    NOTIFICATION_SUBTITLE_MIN_LINES,
     PAGE_TITLE_MAX_LENGTH,
+    PAGE_TITLE_MIN_LENGTH,
     VERSION,
 )
 
@@ -41,8 +51,7 @@ class _HaloMixin(DataClassJSONMixin):
 class _HaloIdMixin:
     """Mixin for Beoremote Halo dataclasses that contain an ID."""
 
-    # This is kw_only to ensure that it is placed at the end of constructor's of classes
-    # that inherit from this one. This ensures
+    # This is kw_only to ensure that it is placed at the end of constructor's of classes that inherit from this one
     id_: UUID = field(default_factory=uuid1, metadata=field_options(alias="id"), kw_only=True)
 
 
@@ -153,10 +162,15 @@ class Icon(_HaloMixin):
 class Text(_HaloMixin):
     """Text to be shown inside of a `Button`.
 
-    `text` should be limited to 6 characters.
+    Args:
+        text: Limited to 0-6
     """
 
     text: str
+
+    def __post_init__(self) -> None:
+        """Ensure provided values are valid."""
+        _validate_text(self.text, BUTTON_CONTENT_TEXT_MIN_LENGTH, BUTTON_CONTENT_TEXT_MAX_LENGTH)
 
 
 class ButtonState(StrEnum):
@@ -170,13 +184,16 @@ class ButtonState(StrEnum):
 class Button(_HaloMixin, _HaloIdMixin):
     """An interact-able element that represents an action or physical device.
 
-    Contains a title, content (either an icon or text), subtitle, value, state and if it is the default.
-    `Button`s marked as default will be preselected when interacting with the Halo.
-    Only a single Button can be default in a configuration.
-    `title` and `subtitle` should be limited to 15 characters.
+    Args:
+        title: Limited to a length of 0-15
+        content: Shown in the center of the `Button` on the Halo
+        subtitle: Limited to a length of 0-15
+        value: Limited to value of 0-100
+        state: Overall state of the `Button`. Affects the `Icon` if configured
+        default: `Button`s marked as default will be preselected when interacting with the Halo.
+            Only a single Button can be default in a configuration
+        id_: Unique identifier for the button. If no ID is provided, then one will be automatically generated
 
-    If no ID is provided, then one will be automatically generated.
-    Ensures that the value is in the range 0-100.
     """
 
     title: str
@@ -187,84 +204,58 @@ class Button(_HaloMixin, _HaloIdMixin):
     default: bool | None = False
 
     def __post_init__(self) -> None:
-        """Ensure value is in a valid range.
-
-        Raises:
-            ValueError: Invalid button value
-        """
-        if self.value is not None and (self.value < MIN_VALUE or self.value > MAX_VALUE):
-            msg = f"Invalid button value: {self.value}. Button value must be in the range: {MIN_VALUE}-{MAX_VALUE}"
-            raise ValueError(msg)
+        """Ensure provided values are valid."""
+        _validate_text(self.title, BUTTON_TITLE_MIN_LENGTH, BUTTON_TITLE_MAX_LENGTH)
+        _validate_text(self.subtitle, BUTTON_SUBTITLE_MIN_LENGTH, BUTTON_SUBTITLE_MAX_LENGTH)
+        _validate_button_value(self.value)
 
 
 @dataclass
 class Page(_HaloMixin, _HaloIdMixin):
     """Group of `Button` elements grouped with a title in the `Configuration`.
 
-    Contains a title, a list of buttons and an id.
-    `title` should be limited to 40 characters.
+    Args:
+        title: Limited to a length of  0-40
+        buttons: Group of `Button` elements. Limited to a length of 1-8
+        id_: Unique identifier for the button. If no ID is provided, then one will be automatically generated
 
-    If no ID is provided, then one will be automatically generated.
-    Ensures that at 1-8 buttons are in a page.
     """
 
     title: str
     buttons: list[Button]
 
     def __post_init__(self) -> None:
-        """Ensure page is valid.
-
-        Raises:
-            ValueError: Invalid number of buttons
-        """
-        # Ensure that there are  0-8 buttons.
-        number_of_buttons = len(self.buttons)
-        if number_of_buttons > MAX_BUTTONS:
-            msg = f"Invalid number of buttons: {number_of_buttons}. Only {MIN_BUTTONS}-{MAX_BUTTONS} buttons are allowed in a page."
-            raise ValueError(msg)
+        """Ensure provided values are valid."""
+        _validate_text(self.title, PAGE_TITLE_MIN_LENGTH, PAGE_TITLE_MAX_LENGTH)
+        _validate_list(self.buttons, MIN_BUTTONS, MAX_BUTTONS)
 
 
 @dataclass
 class Configuration(_HaloMixin, _HaloIdMixin):
     """Main Configuration class.
 
-    Contains a list of pages, the version of the API client and an ID.
+    Args:
+        pages: Group of `Page` elements. Limited to a length of 1-3
+        version: Version of the API
+        id_: Unique identifier for the button. If no ID is provided, then one will be automatically generated
 
-    If no ID is provided, then one will be automatically generated.
-    Ensures that at most one `Button` is marked default.
-    Ensures that at 1-3 pages are in a configuration.
     """
 
     pages: list[Page]
     version: str = VERSION
 
     def __post_init__(self) -> None:
-        """Ensure configuration is valid.
-
-        Raises:
-            ValueError: Multiple default buttons defined or invalid number of pages
-        """
-        # Ensure that at most one Button is marked as default.
-        default_buttons: list[Button] = []
-        for page in self.pages:
-            default_buttons.extend(button for button in page.buttons if button.default is True)
-
-        if len(default_buttons) > 1:
-            msg = f"Only a single Button can be default per configuration. Default buttons found {default_buttons}"
-            raise ValueError(msg)
-
-        # Ensure that there are 0-3 pages.
-        number_of_pages = len(self.pages)
-        if number_of_pages < MIN_PAGES or number_of_pages > MAX_PAGES:
-            msg = f"Invalid number of pages: {number_of_pages}. Only {MIN_PAGES}-{MAX_PAGES} pages are allowed per configuration."
-            raise ValueError(msg)
+        """Ensure provided values are valid."""
+        _validate_default_button(self.pages)
+        _validate_list(self.pages, MIN_PAGES, MAX_PAGES)
 
 
 @dataclass
 class BaseConfiguration(_HaloMixin):
     """Root configuration class.
 
-    Contains the main configuration class.
+    Args:
+        configuration: Main configuration class
     """
 
     configuration: Configuration
@@ -279,13 +270,10 @@ class ButtonEventState(StrEnum):
 
 @dataclass
 class ButtonEvent(_HaloMixin, _HaloIdMixin):
-    """Button event received from the Halo.
-
-    Contains the ID and the (new) state of the button.
-    """
+    """Button event received from the Halo."""
 
     state: ButtonEventState
-    type_: Literal[EventTypes.BUTTON] = field(default=EventTypes.BUTTON, metadata=field_options(alias="type"))
+    type_: Literal[EventTypes.BUTTON] = field(metadata=field_options(alias="type"), init=False)
 
 
 class PowerEventState(StrEnum):
@@ -308,7 +296,7 @@ class PowerEvent(_HaloMixin):
 
     capacity: int
     state: PowerEventState
-    type_: Literal[EventTypes.POWER] = field(default=EventTypes.POWER, metadata=field_options(alias="type"))
+    type_: Literal[EventTypes.POWER] = field(metadata=field_options(alias="type"), init=False)
 
 
 class StatusEventState(StrEnum):
@@ -344,7 +332,7 @@ class StatusEvent(_HaloMixin):
 
     state: StatusEventState
     message: str | None = None
-    type_: Literal[EventTypes.STATUS] = field(default=EventTypes.STATUS, metadata=field_options(alias="type"))
+    type_: Literal[EventTypes.STATUS] = field(metadata=field_options(alias="type"), init=False)
 
 
 class SystemEventState(StrEnum):
@@ -363,7 +351,7 @@ class SystemEvent(_HaloMixin):
     """
 
     state: SystemEventState
-    type_: Literal[EventTypes.SYSTEM] = field(default=EventTypes.SYSTEM, metadata=field_options(alias="type"))
+    type_: Literal[EventTypes.SYSTEM] = field(metadata=field_options(alias="type"), init=False)
 
 
 @dataclass
@@ -378,7 +366,7 @@ class WheelEvent(_HaloMixin, _HaloIdMixin):
     """
 
     counts: Literal[-5, -4, -3, -2, -1, 1, 2, 3, 4, 5]
-    type_: Literal[EventTypes.WHEEL] = field(default=EventTypes.WHEEL, metadata=field_options(alias="type"))
+    type_: Literal[EventTypes.WHEEL] = field(metadata=field_options(alias="type"), init=False)
 
 
 @dataclass
@@ -402,17 +390,13 @@ class UpdateButton(_HaloMixin, _HaloIdMixin):
     title: str | None = None
     subtitle: str | None = None
     content: Text | Icon | None = None
-    type_: Literal[UpdateTypes.BUTTON] = field(default=UpdateTypes.BUTTON, metadata=field_options(alias="type"))
+    type_: Literal[UpdateTypes.BUTTON] = field(default=UpdateTypes.BUTTON, metadata=field_options(alias="type"), init=False)
 
     def __post_init__(self) -> None:
-        """Ensure value is in a valid range.
-
-        Raises:
-            ValueError: Invalid button value
-        """
-        if self.value is not None and (self.value < MIN_VALUE or self.value > MAX_VALUE):
-            msg = f"Invalid button value: {self.value}. Button value must be in the range: {MIN_VALUE}-{MAX_VALUE}"
-            raise ValueError(msg)
+        """Ensure provided values are valid."""
+        _validate_button_value(self.value)
+        _validate_text(self.title, BUTTON_TITLE_MIN_LENGTH, BUTTON_TITLE_MAX_LENGTH)
+        _validate_text(self.subtitle, BUTTON_SUBTITLE_MIN_LENGTH, BUTTON_SUBTITLE_MAX_LENGTH)
 
 
 @dataclass
@@ -424,9 +408,9 @@ class UpdateDisplayPage(_HaloMixin):
     Sending this will make the Halo focus on a specified button on a page.
     """
 
-    page_id: str = field(metadata=field_options(alias="pageid"))
-    button_id: str | None = field(default=None, metadata=field_options(alias="buttonid"))
-    type_: Literal[UpdateTypes.DISPLAY_PAGE] = field(default=UpdateTypes.DISPLAY_PAGE, metadata=field_options(alias="type"))
+    page_id: UUID = field(metadata=field_options(alias="pageid"))
+    button_id: UUID | None = field(default=None, metadata=field_options(alias="buttonid"))
+    type_: Literal[UpdateTypes.DISPLAY_PAGE] = field(default=UpdateTypes.DISPLAY_PAGE, metadata=field_options(alias="type"), init=False)
 
 
 @dataclass
@@ -438,42 +422,12 @@ class UpdateNotification(_HaloMixin, _HaloIdMixin):
 
     title: str | None = None
     message: str | None = field(default=None, metadata=field_options(alias="subtitle"))
-    type_: Literal[UpdateTypes.NOTIFICATION] = field(default=UpdateTypes.NOTIFICATION, metadata=field_options(alias="type"))
+    type_: Literal[UpdateTypes.NOTIFICATION] = field(default=UpdateTypes.NOTIFICATION, metadata=field_options(alias="type"), init=False)
 
     def __post_init__(self) -> None:
-        """Warn if notification title and message can't be displayed properly."""
-        if self.title and len(self.title) > PAGE_TITLE_MAX_LENGTH:
-            _LOGGER.warning(
-                "The provided title has a length of %s, which is more than the recommended length of %s.",
-                len(self.title),
-                PAGE_TITLE_MAX_LENGTH,
-            )
-
-        if self.message is None:
-            return
-
-        if len(self.message) > NOTIFICATION_SUBTITLE_MAX_LENGTH:
-            _LOGGER.warning(
-                "The provided message has %s characters, which is more that the maximum recommended number of lines of %s.",
-                len(self.message),
-                NOTIFICATION_SUBTITLE_MAX_LENGTH,
-            )
-
-        if len(self.message.splitlines()) > NOTIFICATION_SUBTITLE_MAX_LINES:
-            _LOGGER.warning(
-                "The provided message has %s lines, which is more that the maximum recommended number of lines of %s.",
-                len(self.message.splitlines()),
-                NOTIFICATION_SUBTITLE_MAX_LINES,
-            )
-
-        for line in self.message.splitlines():
-            if len(line) > NOTIFICATION_SUBTITLE_MAX_LINE_LENGTH:
-                _LOGGER.warning(
-                    "A provided line (%s) in the subtitle has a length of %s, which is more than the recommended length of %s.",
-                    line,
-                    len(line),
-                    NOTIFICATION_SUBTITLE_MAX_LINE_LENGTH,
-                )
+        """Ensure provided values are valid."""
+        _validate_text(self.title, PAGE_TITLE_MIN_LENGTH, PAGE_TITLE_MAX_LENGTH)
+        _validate_notification_message(self.message)
 
 
 @dataclass
@@ -490,3 +444,70 @@ class BaseWebSocketResponse(TypedDict):
 
 
 EventType = WheelEvent | SystemEvent | StatusEvent | PowerEvent | ButtonEvent
+
+# Mashumaro does not support validation. Validate manually with these helper functions
+
+
+def _validate_text(text: str | None, minimum: int, maximum: int) -> None:
+    """Check if provided Button text length is within accepted limits.
+
+    Raises:
+        ValueError: Text length is not within provided limits
+    """
+    if text is not None and (length := len(text)) and (length < minimum or length > maximum):
+        msg = f"Invalid Button text length: {length}. Button text length must be in the range: {minimum}-{maximum}"
+        raise ValueError(msg)
+
+
+def _validate_list(list_: list, minimum: int, maximum: int) -> None:
+    """Check if list length is within accepted limits.
+
+    Raises:
+        ValueError: List length is not within provided limits
+    """
+    if (length := len(list_)) and (length < minimum or length > maximum):
+        msg = f"Invalid list length: {length}. List length must be in the range: {minimum}-{maximum}"
+        raise ValueError(msg)
+
+
+def _validate_button_value(value: int | None) -> None:
+    """Check if provided Button value is within accepted limits.
+
+    Raises:
+        ValueError: Value is not within 0-100
+    """
+    if value is not None and (value < MIN_VALUE or value > MAX_VALUE):
+        msg = f"Invalid button value: {value}. Button value must be in the range: {MIN_VALUE}-{MAX_VALUE}"
+        raise ValueError(msg)
+
+
+def _validate_default_button(pages: list[Page]) -> None:
+    """Check if provided pages only contain at most 1 default button.
+
+    Raises:
+        ValueError: More than 1 default button
+    """
+    default_buttons: list[Button] = []
+    for page in pages:
+        default_buttons.extend(button for button in page.buttons if button.default is True)
+
+    if len(default_buttons) > 1:
+        msg = f"Only a single Button can be default per configuration. Default buttons found {default_buttons}"
+        raise ValueError(msg)
+
+
+def _validate_notification_message(message: str | None) -> None:
+    """Check if notification has valid formatting.
+
+    Raises:
+        ValueError: Invalid notification formatting
+    """
+    if message is not None:
+        try:
+            _validate_text(message, NOTIFICATION_SUBTITLE_MIN_LENGTH, NOTIFICATION_SUBTITLE_MAX_LENGTH)
+            _validate_list(message.splitlines(), NOTIFICATION_SUBTITLE_MIN_LINES, NOTIFICATION_SUBTITLE_MAX_LINES)
+            for line in message.splitlines():
+                _validate_text(line, NOTIFICATION_SUBTITLE_MIN_LINE_LENGTH, NOTIFICATION_SUBTITLE_MAX_LINE_LENGTH)
+        except ValueError as error:
+            msg = "Invalid notification formatting"
+            raise ValueError(msg) from error

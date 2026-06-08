@@ -3,7 +3,7 @@
 import pytest
 
 from beoremote_halo import MAX_VALUE, MIN_VALUE
-from beoremote_halo.const import BUTTON_SUBTITLE_MAX_LENGTH, BUTTON_TEXT_MAX_LENGTH, BUTTON_TITLE_MAX_LENGTH, PAGE_TITLE_MAX_LENGTH
+from beoremote_halo.const import BUTTON_CONTENT_TEXT_MAX_LENGTH, BUTTON_SUBTITLE_MAX_LENGTH, BUTTON_TITLE_MAX_LENGTH, PAGE_TITLE_MAX_LENGTH
 from beoremote_halo.util import (
     clamp_button_value,
     interpolate_button_value,
@@ -77,7 +77,7 @@ def test_trim_button_text(text: str, expected_text: str) -> None:
     """Test `trim_button_text`."""
     trimmed = trim_button_text(text)
     assert trimmed == expected_text
-    assert len(trimmed) <= BUTTON_TEXT_MAX_LENGTH
+    assert len(trimmed) <= BUTTON_CONTENT_TEXT_MAX_LENGTH
 
 
 @pytest.mark.parametrize(
