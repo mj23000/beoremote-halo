@@ -4,8 +4,8 @@ import asyncio
 import sys
 
 # Add support for "older" Python versions
-if sys.version_info >= (3, 13):
-    QueueExceptions = asyncio.QueueFull | asyncio.QueueShutDown
+if sys.version_info >= (3, 13):  # noqa: UP036,RUF100
+    QueueExceptions = (asyncio.QueueFull, asyncio.QueueShutDown)
 else:
     QueueExceptions = asyncio.QueueFull
 
