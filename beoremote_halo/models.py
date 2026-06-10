@@ -29,6 +29,8 @@ from beoremote_halo.const import (
     NOTIFICATION_SUBTITLE_MIN_LENGTH,
     NOTIFICATION_SUBTITLE_MIN_LINE_LENGTH,
     NOTIFICATION_SUBTITLE_MIN_LINES,
+    NOTIFICATION_TITLE_MAX_LENGTH,
+    NOTIFICATION_TITLE_MIN_LENGTH,
     PAGE_TITLE_MAX_LENGTH,
     PAGE_TITLE_MIN_LENGTH,
     VERSION,
@@ -168,7 +170,7 @@ class Text(_HaloMixin):
 
     text: str
 
-    def __post_init__(self) -> None:
+    def validate(self) -> None:
         """Ensure provided values are valid."""
         _validate_text(self.text, BUTTON_CONTENT_TEXT_MIN_LENGTH, BUTTON_CONTENT_TEXT_MAX_LENGTH)
 
@@ -203,7 +205,7 @@ class Button(_HaloMixin, _HaloIdMixin):
     state: ButtonState | None = None
     default: bool | None = False
 
-    def __post_init__(self) -> None:
+    def validate(self) -> None:
         """Ensure provided values are valid."""
         _validate_text(self.title, BUTTON_TITLE_MIN_LENGTH, BUTTON_TITLE_MAX_LENGTH)
         _validate_text(self.subtitle, BUTTON_SUBTITLE_MIN_LENGTH, BUTTON_SUBTITLE_MAX_LENGTH)
@@ -218,13 +220,12 @@ class Page(_HaloMixin, _HaloIdMixin):
         title: Limited to a length of  0-40
         buttons: Group of `Button` elements. Limited to a length of 1-8
         id_: Unique identifier for the button. If no ID is provided, then one will be automatically generated
-
     """
 
     title: str
     buttons: list[Button]
 
-    def __post_init__(self) -> None:
+    def validate(self) -> None:
         """Ensure provided values are valid."""
         _validate_text(self.title, PAGE_TITLE_MIN_LENGTH, PAGE_TITLE_MAX_LENGTH)
         _validate_list(self.buttons, MIN_BUTTONS, MAX_BUTTONS)
@@ -238,13 +239,12 @@ class Configuration(_HaloMixin, _HaloIdMixin):
         pages: Group of `Page` elements. Limited to a length of 1-3
         version: Version of the API
         id_: Unique identifier for the button. If no ID is provided, then one will be automatically generated
-
     """
 
     pages: list[Page]
     version: str = VERSION
 
-    def __post_init__(self) -> None:
+    def validate(self) -> None:
         """Ensure provided values are valid."""
         _validate_default_button(self.pages)
         _validate_list(self.pages, MIN_PAGES, MAX_PAGES)
@@ -380,9 +380,14 @@ class Event(_HaloMixin):
 class UpdateButton(_HaloMixin, _HaloIdMixin):
     """Button update to be sent to the Halo.
 
-    Contains all defined button attributes
-
     Sending this will update the defined attributes of a single `Button` in a configuration.
+
+    Args:
+        state: State to update
+        value: Value to update
+        title: Title to update
+        subtitle: Subtitle to update
+        content: Content to update
     """
 
     state: ButtonState | None = None
@@ -392,7 +397,7 @@ class UpdateButton(_HaloMixin, _HaloIdMixin):
     content: Text | Icon | None = None
     type_: Literal[UpdateTypes.BUTTON] = field(default=UpdateTypes.BUTTON, metadata=field_options(alias="type"), init=False)
 
-    def __post_init__(self) -> None:
+    def validate(self) -> None:
         """Ensure provided values are valid."""
         _validate_button_value(self.value)
         _validate_text(self.title, BUTTON_TITLE_MIN_LENGTH, BUTTON_TITLE_MAX_LENGTH)
@@ -403,9 +408,11 @@ class UpdateButton(_HaloMixin, _HaloIdMixin):
 class UpdateDisplayPage(_HaloMixin):
     """Display a specific `Page` and `Button`.
 
-    Contains page and button id.
-
     Sending this will make the Halo focus on a specified button on a page.
+
+    Args:
+        page_id: UUID of page to display
+        button_id: UUID of button in page to display
     """
 
     page_id: UUID = field(metadata=field_options(alias="pageid"))
@@ -424,9 +431,9 @@ class UpdateNotification(_HaloMixin, _HaloIdMixin):
     message: str | None = field(default=None, metadata=field_options(alias="subtitle"))
     type_: Literal[UpdateTypes.NOTIFICATION] = field(default=UpdateTypes.NOTIFICATION, metadata=field_options(alias="type"), init=False)
 
-    def __post_init__(self) -> None:
+    def validate(self) -> None:
         """Ensure provided values are valid."""
-        _validate_text(self.title, PAGE_TITLE_MIN_LENGTH, PAGE_TITLE_MAX_LENGTH)
+        _validate_text(self.title, NOTIFICATION_TITLE_MIN_LENGTH, NOTIFICATION_TITLE_MAX_LENGTH)
         _validate_notification_message(self.message)
 
 
@@ -445,7 +452,7 @@ class BaseWebSocketResponse(TypedDict):
 
 EventType = WheelEvent | SystemEvent | StatusEvent | PowerEvent | ButtonEvent
 
-# Mashumaro does not support validation. Validate manually with these helper functions
+# Mashumaro does not support validation. Validate manually through the `validate` methods that use these helper functions
 
 
 def _validate_text(text: str | None, minimum: int, maximum: int) -> None:
