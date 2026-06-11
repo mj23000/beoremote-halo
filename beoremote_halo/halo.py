@@ -90,7 +90,7 @@ class Halo:
             If the data was successfully put into WebSocket queue
         """
         try:
-            self._queue.put_nowait(str(data.to_json()))
+            self._queue.put_nowait(data.to_json())
         except QueueExceptions as e:
             self._logger.debug("Unable to send data: %s with error: %s", data, e)
             return False

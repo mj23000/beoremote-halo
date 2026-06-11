@@ -2,7 +2,7 @@
 
 from typing import Final
 
-VERSION: Final = "1.0.2"
+VERSION: Final = "1.0.1"
 
 WEBSOCKET_TIMEOUT: Final = 5.0
 
@@ -12,10 +12,12 @@ MAX_VALUE: Final = 100
 WHEEL_COUNTS_MIN: Final = -5
 WHEEL_COUNTS_MAX: Final = 5
 
-MIN_PAGES: Final = 1
+# MIN_PAGES and MIN_BUTTONS are supposed to be 1 according to the AsyncAPI spec
+# That makes setting up a configuration more cumbersome than necessary, so it is ignored here
+MIN_PAGES: Final = 0
 MAX_PAGES: Final = 3
 
-MIN_BUTTONS: Final = 1
+MIN_BUTTONS: Final = 0
 MAX_BUTTONS: Final = 8
 
 BUTTON_CONTENT_TEXT_MIN_LENGTH: Final = 0

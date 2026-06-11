@@ -38,7 +38,7 @@ CHANDELIER_BUTTON = Button(
     "20%",
     20,
     ButtonState.ACTIVE,
-    default=True,
+    True,
     id_=UUID("3c494ca3-5bbb-420e-babc-0752838b457d"),
 )
 DINING_ROOM_PAGE = Page("Dining room", [CHANDELIER_BUTTON], id_=UUID("8b836136-b71d-4611-b7f0-d136e68ceb0f"))
