@@ -3,7 +3,7 @@
 import json
 import logging
 from enum import Enum, StrEnum
-from typing import Any, Literal, Self, TypedDict
+from typing import Any, Literal, Self, TypedDict, cast
 from uuid import UUID, uuid1
 
 from pydantic import ConfigDict, Field, TypeAdapter, field_validator
@@ -50,20 +50,52 @@ class _HaloConfigMixin:
     def from_json(cls, value: str) -> Self:
         return TypeAdapter(cls).validate_python(json.loads(value))
 
-    def to_dict(self) -> str:
+    def to_dict(self) -> dict[str, Any]:
         return json.loads(self.to_json())
 
     @classmethod
     def from_dict(cls, value: dict[str, Any]) -> Self:
-        return TypeAdapter(cls).validate_python(value)
+        return cast("Self", TypeAdapter(Self).validate_python(value))
 
 
 @dataclass
 class _HaloIdMixin:
-    """Mixin for Beoremote Halo dataclasses that contain an ID."""
+    """Mixin for Beoremote Halo dataclasses that contain an ID.
+
+    String values are accepted in the constructor, but are immediately converted to UUID.
+    """
 
     # This is kw_only to ensure that it is placed at the end of constructor's of classes that inherit from this one
-    id_: UUID = Field(serialization_alias="id", default_factory=uuid1, kw_only=True)
+    id_: UUID | str = Field(serialization_alias="id", default_factory=uuid1, kw_only=True)
+
+    @property
+    def uuid_id(self) -> UUID:
+        """IDs are always converted to UUID, so only casting is necessary."""
+        return cast("UUID", self.id_)
+
+    @property
+    def str_id(self) -> str:
+        """String representation of ID."""
+        return str(self.id_)
+
+    @field_validator("id_", mode="after")
+    @classmethod
+    def valid_id_(cls, id_: UUID | str) -> UUID:
+        """Check if provided string is a valid UUID.
+
+        Returns:
+            Valid ID in UUID form
+
+        Raises:
+            ValueError: Invalid UUID string
+        """
+        if isinstance(id_, str):
+            try:
+                return UUID(id_)
+            except ValueError as e:
+                msg = f"Malformed UUID str: {id_}"
+                raise ValueError(msg) from e
+        return id_
 
 
 class UpdateTypes(StrEnum):
@@ -217,7 +249,7 @@ class Page(_HaloConfigMixin, _HaloIdMixin):
 
     Args:
         title: Limited to a length of  0-40
-        buttons: Group of `Button` elements. Limited to a length of 1-8
+        buttons: Group of `Button` elements. Limited to a length of 0-8
         id_: Unique identifier for the button. If no ID is provided, then one will be automatically generated
     """
 

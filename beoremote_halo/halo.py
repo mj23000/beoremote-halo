@@ -134,7 +134,7 @@ class Halo:
             # Update button in configuration
             update_button(
                 self._configuration,
-                update.update.id_,
+                update.update.uuid_id,
                 state=update.update.state,
                 value=update.update.value,
                 title=update.update.title,

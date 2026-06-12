@@ -10,7 +10,7 @@ from beoremote_halo.models import BaseConfiguration, Button, ButtonState, Icon, 
 def clear_default_button(configuration: BaseConfiguration) -> None:
     """Remove the default flag from a configuration if present."""
     if (button := get_default_button(configuration)) is not None:
-        page_idx, button_idx = get_button_indices(configuration, button.id_)
+        page_idx, button_idx = get_button_indices(configuration, button.uuid_id)
         configuration.configuration.pages[page_idx].buttons[button_idx].default = False
 
 
@@ -48,7 +48,7 @@ def update_button(
     if state is not None:
         configuration.configuration.pages[page_idx].buttons[button_idx].state = state
     if default is not None:
-        if default is True and (button := get_default_button(configuration)) and button.id_ != id_:
+        if default is True and (button := get_default_button(configuration)) and button.uuid_id != id_:
             msg = f"Default button already defined: {button}. Clear existing default button before setting new one"
             raise ValueError(msg)
         configuration.configuration.pages[page_idx].buttons[button_idx].default = default
@@ -96,7 +96,7 @@ def get_button_indices(configuration: BaseConfiguration, id_: UUID) -> tuple[int
     """
     for page_idx, page in enumerate(configuration.configuration.pages):
         for button_idx, button in enumerate(page.buttons):
-            if button.id_ == id_:
+            if button.uuid_id == id_:
                 return (page_idx, button_idx)
     msg = f"Unable to get indices for Button with ID: {id_}"
     raise ValueError(msg)
@@ -112,7 +112,7 @@ def get_page_index(configuration: BaseConfiguration, id_: UUID) -> int:
         ValueError: `Page` ID can't be found in configuration
     """
     for page_idx, page in enumerate(configuration.configuration.pages):
-        if page.id_ == id_:
+        if page.uuid_id == id_:
             return page_idx
     msg = f"Unable to get index for Page with ID: {id_}"
     raise ValueError(msg)
@@ -128,7 +128,7 @@ def get_page_from_id(configuration: BaseConfiguration, id_: UUID) -> Page:
         ValueError: `Page` ID can't be found in configuration
     """
     for page in configuration.configuration.pages:
-        if page.id_ == id_:
+        if page.uuid_id == id_:
             return page
     msg = f"Unable to get Page with ID: {id_}"
     raise ValueError(msg)
@@ -145,7 +145,7 @@ def get_button_from_id(configuration: BaseConfiguration, id_: UUID) -> Button:
     """
     for page in configuration.configuration.pages:
         for button in page.buttons:
-            if button.id_ == id_:
+            if button.uuid_id == id_:
                 return button
     msg = f"Unable to get Button with ID: {id_}"
     raise ValueError(msg)

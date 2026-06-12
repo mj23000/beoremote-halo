@@ -15,9 +15,11 @@ WHEEL_COUNTS_MAX: Final = 5
 # MIN_PAGES and MIN_BUTTONS are supposed to be 1 according to the AsyncAPI spec
 # That makes setting up a configuration more cumbersome than necessary, so it is ignored here
 MIN_PAGES: Final = 0
+MIN_PAGES_VALIDATION: Final = 1
 MAX_PAGES: Final = 3
 
 MIN_BUTTONS: Final = 0
+MIN_BUTTONS_VALIDATION: Final = 1
 MAX_BUTTONS: Final = 8
 
 BUTTON_CONTENT_TEXT_MIN_LENGTH: Final = 0
