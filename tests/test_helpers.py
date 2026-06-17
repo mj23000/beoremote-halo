@@ -214,7 +214,7 @@ def test_update_button(configuration: BaseConfiguration) -> None:
     new_values = Button("New title", Text("New"), "New subtitle", 33, ButtonState.INACTIVE, default=False)
     update_button(
         configuration,
-        CHANDELIER_BUTTON.id_,
+        CHANDELIER_BUTTON.uuid_id,
         new_values.title,
         new_values.content,
         new_values.subtitle,
@@ -255,7 +255,7 @@ def test_update_button_value(
 ) -> None:
     """Test `update_button` with various values."""
     with expected_error:
-        update_button(configuration, CHANDELIER_BUTTON.id_, value=value)
+        update_button(configuration, CHANDELIER_BUTTON.uuid_id, value=value)
         assert configuration.configuration.pages[0].buttons[0].value == expected_result
 
 
@@ -299,7 +299,7 @@ def test_update_page(configuration: BaseConfiguration) -> None:
     """Test `update_page`."""
     # Update all available attributes with valid values
     new_values = Page("New title", [Button("New button", Icon(Icons.BATH_TUB))])
-    update_page(configuration, DINING_ROOM_PAGE.id_, new_values.title, new_values.buttons)
+    update_page(configuration, DINING_ROOM_PAGE.uuid_id, new_values.title, new_values.buttons)
     # Check new values
     assert configuration.configuration.pages[0] != DINING_ROOM_PAGE
     assert configuration.configuration.pages[0].title == new_values.title
