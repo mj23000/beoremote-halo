@@ -23,7 +23,6 @@ from aiohttp.client_exceptions import (
     ClientOSError,
     ServerTimeoutError,
 )
-from inflection import underscore
 
 from beoremote_halo.const import WEBSOCKET_TIMEOUT
 from beoremote_halo.helpers import update_button
@@ -34,6 +33,7 @@ from beoremote_halo.models import (
     Configuration,
     Event,
     EventType,
+    EventTypes,
     PowerEvent,
     StatusEvent,
     SystemEvent,
@@ -46,11 +46,7 @@ from beoremote_halo.models import (
 class Halo:
     """Beoremote Halo client."""
 
-    def __init__(
-        self,
-        host: str,
-        configuration: BaseConfiguration | None = None,
-    ) -> None:
+    def __init__(self, host: str, configuration: BaseConfiguration | None = None) -> None:
         """Initialize Halo client.
 
         Args:
@@ -75,7 +71,7 @@ class Halo:
         self._on_all_events: Callable | None = None
         self._on_all_events_raw: Callable | None = None
 
-        self._event_callbacks: dict[str, Callable | None] = defaultdict()
+        self._event_callbacks: dict[EventTypes, Callable | None] = defaultdict()
         self._event_callbacks.default_factory = lambda: None
 
         self._logger = logging.getLogger(__name__)
@@ -265,11 +261,7 @@ class Halo:
 
         # Handle all events if defined
         if self._on_all_events:
-            await self._trigger_callback(
-                self._on_all_events,
-                deserialized_data,
-                underscore(deserialized_data.type_),
-            )
+            await self._trigger_callback(self._on_all_events, deserialized_data, deserialized_data.type_)
 
         if self._on_all_events_raw:
             await self._trigger_callback(self._on_all_events_raw, json.loads(event))
@@ -281,7 +273,7 @@ class Halo:
             await self._trigger_callback(triggered_event, deserialized_data)
 
     @staticmethod
-    async def _trigger_callback(callback: Callable, *args: BaseWebSocketResponse | dict | str | EventType) -> None:
+    async def _trigger_callback(callback: Callable, *args: BaseWebSocketResponse | dict | str | EventType | EventTypes) -> None:
         """Trigger async or sync callback correctly."""
         if inspect.iscoroutinefunction(callback):
             await callback(*args)
@@ -298,7 +290,7 @@ class Halo:
 
     def get_all_events(
         self,
-        on_all_events: Callable[[EventType, str], Awaitable[None] | None],
+        on_all_events: Callable[[EventType, EventTypes], Awaitable[None] | None],
     ) -> None:
         """Set callback for all events."""
         self._on_all_events = on_all_events
@@ -312,20 +304,20 @@ class Halo:
 
     def get_wheel_event(self, on_wheel_event: Callable[[WheelEvent], Awaitable[None] | None]) -> None:
         """Set callback for WheelEvent."""
-        self._event_callbacks["wheel"] = on_wheel_event
+        self._event_callbacks[EventTypes.WHEEL] = on_wheel_event
 
     def get_system_event(self, on_system_event: Callable[[SystemEvent], Awaitable[None] | None]) -> None:
         """Set callback for SystemEvent."""
-        self._event_callbacks["system"] = on_system_event
+        self._event_callbacks[EventTypes.SYSTEM] = on_system_event
 
     def get_status_event(self, on_status_event: Callable[[StatusEvent], Awaitable[None] | None]) -> None:
         """Set callback for StatusEvent."""
-        self._event_callbacks["status"] = on_status_event
+        self._event_callbacks[EventTypes.STATUS] = on_status_event
 
     def get_power_event(self, on_power_event: Callable[[PowerEvent], Awaitable[None] | None]) -> None:
         """Set callback for PowerEvent."""
-        self._event_callbacks["power"] = on_power_event
+        self._event_callbacks[EventTypes.POWER] = on_power_event
 
     def get_button_event(self, on_button_event: Callable[[ButtonEvent], Awaitable[None] | None]) -> None:
         """Set callback for ButtonEvent."""
-        self._event_callbacks["button"] = on_button_event
+        self._event_callbacks[EventTypes.BUTTON] = on_button_event
