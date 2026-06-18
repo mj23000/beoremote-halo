@@ -1,14 +1,13 @@
 """Models used for the Beoremote Halo client."""
 
-import json
 import logging
 from enum import Enum, StrEnum
 from typing import Any, Literal, Self, TypedDict, cast
-from uuid import UUID, uuid1
+from uuid import UUID, uuid4
 
 from pydantic import ConfigDict, Field, TypeAdapter, field_validator
 from pydantic.dataclasses import dataclass
-from pydantic_core import to_jsonable_python
+from pydantic_core import from_json, to_json
 
 from beoremote_halo.const import (
     BUTTON_CONTENT_TEXT_MAX_LENGTH,
@@ -44,18 +43,18 @@ class _HaloConfigMixin:
     """Mixin for Beoremote Halo dataclass configuration."""
 
     def to_json(self) -> str:
-        return json.dumps(to_jsonable_python(self, exclude_none=True, by_alias=True))
+        return to_json(self, exclude_none=True, by_alias=True).decode()
 
     @classmethod
-    def from_json(cls, value: str) -> Self:
-        return TypeAdapter(cls).validate_python(json.loads(value))
+    def from_json(cls: type[Self], value: str) -> Self:
+        return TypeAdapter(cls).validate_json(value, by_alias=True, by_name=True)
 
     def to_dict(self) -> dict[str, Any]:
-        return json.loads(self.to_json())
+        return from_json(self.to_json())
 
     @classmethod
-    def from_dict(cls, value: dict[str, Any]) -> Self:
-        return cast("Self", TypeAdapter(Self).validate_python(value))
+    def from_dict(cls: type[Self], value: dict[str, Any]) -> Self:
+        return TypeAdapter(cls).validate_python(value, by_alias=True, by_name=True)
 
 
 @dataclass
@@ -66,7 +65,7 @@ class _HaloIdMixin:
     """
 
     # This is kw_only to ensure that it is placed at the end of constructor's of classes that inherit from this one
-    id_: UUID | str = Field(serialization_alias="id", default_factory=uuid1, kw_only=True)
+    id_: UUID | str = Field(serialization_alias="id", validation_alias="id", default_factory=uuid4, kw_only=True)
 
     @property
     def uuid_id(self) -> UUID:
@@ -255,6 +254,24 @@ class Page(_HaloConfigMixin, _HaloIdMixin):
 
     title: str = Field(min_length=PAGE_TITLE_MIN_LENGTH, max_length=PAGE_TITLE_MAX_LENGTH)
     buttons: list[Button] = Field(min_length=MIN_BUTTONS, max_length=MAX_BUTTONS)
+
+    @field_validator("buttons", mode="after")
+    @classmethod
+    def valid_default(cls, buttons: list[Button]) -> list[Button]:
+        """Check if provided buttons only contain at most 1 default button.
+
+        Returns:
+            Defined buttons
+
+        Raises:
+            ValueError: More than 1 default button
+        """
+        default_buttons = [button for button in buttons if button.default is True]
+
+        if len(default_buttons) > 1:
+            msg = f"Only a single Button can be default per configuration. Default buttons found {default_buttons}"
+            raise ValueError(msg)
+        return buttons
 
 
 @dataclass
