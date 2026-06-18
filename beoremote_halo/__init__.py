@@ -73,6 +73,7 @@ from beoremote_halo.models import (
     WheelEvent,
 )
 from beoremote_halo.util import (
+    check_valid_serial_number,
     clamp_button_value,
     interpolate_button_value,
     trim_button_subtitle,
@@ -80,6 +81,8 @@ from beoremote_halo.util import (
     trim_button_title,
     trim_page_title,
 )
+
+__version__ = "2.0.0"
 
 __all__ = [
     "BUTTON_CONTENT_TEXT_MAX_LENGTH",
@@ -137,6 +140,7 @@ __all__ = [
     "UpdateNotification",
     "UpdateTypes",
     "WheelEvent",
+    "check_valid_serial_number",
     "clamp_button_value",
     "clear_default_button",
     "delete_button",

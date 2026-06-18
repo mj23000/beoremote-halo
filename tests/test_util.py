@@ -5,6 +5,7 @@ import pytest
 from beoremote_halo import MAX_VALUE, MIN_VALUE
 from beoremote_halo.const import BUTTON_CONTENT_TEXT_MAX_LENGTH, BUTTON_SUBTITLE_MAX_LENGTH, BUTTON_TITLE_MAX_LENGTH, PAGE_TITLE_MAX_LENGTH
 from beoremote_halo.util import (
+    check_valid_serial_number,
     clamp_button_value,
     interpolate_button_value,
     trim_button_subtitle,
@@ -144,3 +145,23 @@ def test_trim_page_title(text: str, expected_text: str) -> None:
     trimmed = trim_page_title(text)
     assert trimmed == expected_text
     assert len(trimmed) <= PAGE_TITLE_MAX_LENGTH
+
+
+@pytest.mark.parametrize(
+    argnames=("serial_number", "expected_result"),
+    ids=(
+        "valid",
+        "invalid_too_short",
+        "invalid_too_long",
+        "invalid_str",
+    ),
+    argvalues=[
+        ("12345678", True),
+        ("1234567", False),
+        ("123456789", False),
+        ("Notvalid", False),
+    ],
+)
+def test_check_valid_serial_number(serial_number: str, expected_result: str) -> None:
+    """Test `check_valid_serial_number`."""
+    assert check_valid_serial_number(serial_number) == expected_result

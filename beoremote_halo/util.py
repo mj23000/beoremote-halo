@@ -1,5 +1,7 @@
 """Various utilities for Beoremote Halo."""
 
+import re
+
 from beoremote_halo.const import (
     BUTTON_CONTENT_TEXT_MAX_LENGTH,
     BUTTON_SUBTITLE_MAX_LENGTH,
@@ -8,6 +10,15 @@ from beoremote_halo.const import (
     MIN_VALUE,
     PAGE_TITLE_MAX_LENGTH,
 )
+
+
+def check_valid_serial_number(serial_number: str) -> bool:
+    """Check if a serial number is valid.
+
+    Returns:
+        Serial number valid
+    """
+    return bool(re.fullmatch(r"^\d{8}$", serial_number))
 
 
 def clamp_button_value(value: float) -> int:
