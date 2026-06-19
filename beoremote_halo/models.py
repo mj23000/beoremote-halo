@@ -46,14 +46,14 @@ class _HaloConfigMixin:
         return to_json(self, exclude_none=True, by_alias=True).decode()
 
     @classmethod
-    def from_json(cls: type[Self], value: str) -> Self:
+    def from_json(cls, value: str) -> Self:
         return TypeAdapter(cls).validate_json(value, by_alias=True, by_name=True)
 
     def to_dict(self) -> dict[str, Any]:
-        return from_json(self.to_json())
+        return cast("dict[str, Any]", from_json(self.to_json()))
 
     @classmethod
-    def from_dict(cls: type[Self], value: dict[str, Any]) -> Self:
+    def from_dict(cls, value: dict[str, Any]) -> Self:
         return TypeAdapter(cls).validate_python(value, by_alias=True, by_name=True)
 
 
