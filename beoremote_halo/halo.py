@@ -1,20 +1,11 @@
 """Halo client."""
 
 import asyncio
-import sys
-
-# Add support for "older" Python versions
-if sys.version_info >= (3, 13):  # noqa: UP036,RUF100
-    QueueExceptions = (asyncio.QueueFull, asyncio.QueueShutDown)
-else:
-    QueueExceptions = asyncio.QueueFull
-
-
 import contextlib
 import inspect
 import json
 import logging
-from collections import defaultdict
+import sys
 from collections.abc import Awaitable, Callable
 
 from aiohttp import ClientSession, ClientTimeout, WSMessageTypeError
@@ -41,6 +32,12 @@ from beoremote_halo.models import (
     UpdateButton,
     WheelEvent,
 )
+
+# Add support for "older" Python versions
+if sys.version_info >= (3, 13):  # noqa: UP036,RUF100
+    QueueExceptions = (asyncio.QueueFull, asyncio.QueueShutDown)
+else:
+    QueueExceptions = asyncio.QueueFull
 
 
 class Halo:
@@ -71,8 +68,7 @@ class Halo:
         self._on_all_events: Callable | None = None
         self._on_all_events_raw: Callable | None = None
 
-        self._event_callbacks: dict[EventTypes, Callable | None] = defaultdict()
-        self._event_callbacks.default_factory = lambda: None
+        self._event_callbacks: dict[EventTypes, Callable | None] = {}
 
         self._logger = logging.getLogger(__name__)
 
@@ -267,9 +263,7 @@ class Halo:
             await self._trigger_callback(self._on_all_events_raw, json.loads(event))
 
         # Handle specific events if defined
-        triggered_event = self._event_callbacks[deserialized_data.type_]
-
-        if triggered_event:
+        if triggered_event := self._event_callbacks.get(deserialized_data.type_):
             await self._trigger_callback(triggered_event, deserialized_data)
 
     @staticmethod
