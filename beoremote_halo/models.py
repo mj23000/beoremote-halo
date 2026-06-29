@@ -40,7 +40,7 @@ _LOGGER = logging.getLogger(__name__)
 
 @dataclass(config=ConfigDict(validate_by_name=True, validate_by_alias=True, validate_assignment=True))
 class _HaloConfigMixin:
-    """Mixin for Beoremote Halo dataclass configuration."""
+    """Mixin for Beoremote Halo dataclass configuration and de/serialization helpers."""
 
     def to_json(self) -> str:
         return to_json(self, exclude_none=True, by_alias=True).decode()
@@ -58,7 +58,7 @@ class _HaloConfigMixin:
 
 
 @dataclass
-class _HaloIdMixin:
+class _HaloIdMixin(_HaloConfigMixin):
     """Mixin for Beoremote Halo dataclasses that contain an ID.
 
     String values are accepted in the constructor, but are immediately converted to UUID.
@@ -219,7 +219,7 @@ class ButtonState(StrEnum):
 
 
 @dataclass
-class Button(_HaloConfigMixin, _HaloIdMixin):
+class Button(_HaloIdMixin):
     """An interact-able element that represents an action or physical device.
 
     Args:
@@ -243,7 +243,7 @@ class Button(_HaloConfigMixin, _HaloIdMixin):
 
 
 @dataclass
-class Page(_HaloConfigMixin, _HaloIdMixin):
+class Page(_HaloIdMixin):
     """Group of `Button` elements grouped with a title in the `Configuration`.
 
     Args:
@@ -275,7 +275,7 @@ class Page(_HaloConfigMixin, _HaloIdMixin):
 
 
 @dataclass
-class Configuration(_HaloConfigMixin, _HaloIdMixin):
+class Configuration(_HaloIdMixin):
     """Main Configuration class.
 
     Args:
@@ -327,7 +327,7 @@ class ButtonEventState(StrEnum):
 
 
 @dataclass
-class ButtonEvent(_HaloConfigMixin, _HaloIdMixin):
+class ButtonEvent(_HaloIdMixin):
     """Button event received from the Halo."""
 
     state: ButtonEventState
@@ -428,7 +428,7 @@ class WheelEventValues(Enum):
 
 
 @dataclass
-class WheelEvent(_HaloConfigMixin, _HaloIdMixin):
+class WheelEvent(_HaloIdMixin):
     """Wheel event received from the Halo.
 
     Contains id of button and momentum-affected counts value with value range -5..5.
@@ -450,7 +450,7 @@ class Event(_HaloConfigMixin):
 
 
 @dataclass
-class UpdateButton(_HaloConfigMixin, _HaloIdMixin):
+class UpdateButton(_HaloIdMixin):
     """Button update to be sent to the Halo.
 
     Sending this will update the defined attributes of a single `Button` in a configuration.
@@ -488,7 +488,7 @@ class UpdateDisplayPage(_HaloConfigMixin):
 
 
 @dataclass
-class UpdateNotification(_HaloConfigMixin, _HaloIdMixin):
+class UpdateNotification(_HaloIdMixin):
     """Display a notification message.
 
     Sending this will make the Halo show a notification box with the defined title and message.
