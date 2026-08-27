@@ -7,6 +7,7 @@ VERSION: Final = "1.0.1"
 WEBSOCKET_TIMEOUT: Final = 5.0
 
 MIN_VALUE: Final = 0
+CENTER_VALUE: Final = 50
 MAX_VALUE: Final = 100
 
 WHEEL_COUNTS_MIN: Final = -5

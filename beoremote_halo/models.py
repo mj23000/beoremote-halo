@@ -331,7 +331,7 @@ class ButtonEvent(_HaloIdMixin):
     """Button event received from the Halo."""
 
     state: ButtonEventState
-    type_: Literal[EventTypes.BUTTON] = Field(serialization_alias="type", init=False)
+    type_: Literal[EventTypes.BUTTON] = Field(default=EventTypes.BUTTON, serialization_alias="type", init=False)
 
 
 class PowerEventState(StrEnum):
@@ -354,7 +354,7 @@ class PowerEvent(_HaloConfigMixin):
 
     capacity: int
     state: PowerEventState
-    type_: Literal[EventTypes.POWER] = Field(default=EventTypes.POWER, serialization_alias="type")
+    type_: Literal[EventTypes.POWER] = Field(default=EventTypes.POWER, serialization_alias="type", init=False)
 
 
 class StatusEventState(StrEnum):
@@ -390,7 +390,7 @@ class StatusEvent(_HaloConfigMixin):
 
     state: StatusEventState
     message: str | None = None
-    type_: Literal[EventTypes.STATUS] = Field(default=EventTypes.STATUS, serialization_alias="type")
+    type_: Literal[EventTypes.STATUS] = Field(default=EventTypes.STATUS, serialization_alias="type", init=False)
 
 
 class SystemEventState(StrEnum):
@@ -409,7 +409,7 @@ class SystemEvent(_HaloConfigMixin):
     """
 
     state: SystemEventState
-    type_: Literal[EventTypes.SYSTEM] = Field(default=EventTypes.SYSTEM, serialization_alias="type")
+    type_: Literal[EventTypes.SYSTEM] = Field(default=EventTypes.SYSTEM, serialization_alias="type", init=False)
 
 
 class WheelEventValues(Enum):
@@ -439,7 +439,7 @@ class WheelEvent(_HaloIdMixin):
     """
 
     counts: WheelEventValues
-    type_: Literal[EventTypes.WHEEL] = Field(default=EventTypes.WHEEL, serialization_alias="type")
+    type_: Literal[EventTypes.WHEEL] = Field(default=EventTypes.WHEEL, serialization_alias="type", init=False)
 
 
 @dataclass

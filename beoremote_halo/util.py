@@ -1,7 +1,5 @@
 """Various utilities for Beoremote Halo."""
 
-import re
-
 from beoremote_halo.const import (
     BUTTON_CONTENT_TEXT_MAX_LENGTH,
     BUTTON_SUBTITLE_MAX_LENGTH,
@@ -12,13 +10,18 @@ from beoremote_halo.const import (
 )
 
 
-def check_valid_serial_number(serial_number: str) -> bool:
-    """Check if a serial number is valid.
+def clamp_value(value: float, min_value: float, max_value: float) -> int | float:
+    """Clamp a value to provided minimum and maximum values.
+
+    Args:
+        value: Value to be clamped
+        min_value: Minimum value to be clamped to
+        max_value: Maximum value to be clamped to
 
     Returns:
-        Serial number valid
+        Clamped value
     """
-    return bool(re.fullmatch(r"^\d{8}$", serial_number))
+    return max(min_value, min(int(value), max_value))
 
 
 def clamp_button_value(value: float) -> int:
@@ -30,7 +33,7 @@ def clamp_button_value(value: float) -> int:
     Returns:
         Clamped value
     """
-    return max(MIN_VALUE, min(int(value), MAX_VALUE))
+    return int(clamp_value(value, MIN_VALUE, MAX_VALUE))
 
 
 def interpolate_button_value(value: float, min_value: float, max_value: float) -> int:

@@ -7,8 +7,8 @@ readme = "README.md"
 keywords = ["AsyncAPI", "Halo API"]
 requires-python = ">=3.11"
 dependencies = [
+    "aioconsole>=0.4.1",
     "aiohttp>=3.11.0,<4.0.0",
-    "inflection>=0.5.1,<1",
     "pydantic>=2.13.4",
     "zeroconf>=0.25.1,<1.0.0",
 ]
@@ -37,6 +37,8 @@ halo_api = "halo_api.halo_cli:HaloApiCli"
 dev = [
     "prek>=0.4.1",
     "pytest>=9.0.3",
+    "pytest-aiohttp>=1.1.1",
+    "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
     "ruff==0.15.13",
     "ty==0.0.38",
@@ -46,6 +48,9 @@ dev = [
 [build-system]
 requires = ["uv_build >= 0.11.5, <0.12.0"]
 build-backend = "uv_build"
+
+[tool.pytest]
+asyncio_mode = "auto"
 
 
 [tool.ruff]
