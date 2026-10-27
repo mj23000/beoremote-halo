@@ -18,7 +18,7 @@
     {
       "label": "Run tests with coverage",
       "type": "shell",
-      "command": "uv run pytest --cov --cov-report=term-missing",
+      "command": "uv run pytest --cov --cov-report=term-missing -vvv",
       "problemMatcher": []
     }
   ]

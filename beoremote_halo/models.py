@@ -1,15 +1,16 @@
 """Models used for the Beoremote Halo client."""
 
-import logging
+import functools
 from enum import Enum, StrEnum
-from typing import Any, Literal, Self, TypedDict, cast
+from typing import Annotated, Any, Literal, Self, TypedDict, cast
 from uuid import UUID, uuid4
 
-from pydantic import ConfigDict, Field, TypeAdapter, field_validator
+from pydantic import AliasChoices, ConfigDict, Discriminator, Field, Tag, TypeAdapter, field_validator
 from pydantic.dataclasses import dataclass
-from pydantic_core import from_json, to_json
+from pydantic_core import to_json, to_jsonable_python
 
 from beoremote_halo.const import (
+    API_VERSION,
     BUTTON_CONTENT_TEXT_MAX_LENGTH,
     BUTTON_CONTENT_TEXT_MIN_LENGTH,
     BUTTON_SUBTITLE_MAX_LENGTH,
@@ -32,10 +33,17 @@ from beoremote_halo.const import (
     NOTIFICATION_TITLE_MIN_LENGTH,
     PAGE_TITLE_MAX_LENGTH,
     PAGE_TITLE_MIN_LENGTH,
-    VERSION,
 )
 
-_LOGGER = logging.getLogger(__name__)
+
+@functools.cache
+def _type_adapter(cls: type) -> TypeAdapter[Any]:
+    """Get a cached `TypeAdapter`, as creating one for each event received is relatively slow.
+
+    Returns:
+        `TypeAdapter` for the class
+    """
+    return TypeAdapter(cls)
 
 
 @dataclass(config=ConfigDict(validate_by_name=True, validate_by_alias=True, validate_assignment=True))
@@ -47,14 +55,14 @@ class _HaloConfigMixin:
 
     @classmethod
     def from_json(cls, value: str) -> Self:
-        return TypeAdapter(cls).validate_json(value, by_alias=True, by_name=True)
+        return _type_adapter(cls).validate_json(value, by_alias=True, by_name=True)
 
     def to_dict(self) -> dict[str, Any]:
-        return cast("dict[str, Any]", from_json(self.to_json()))
+        return cast("dict[str, Any]", to_jsonable_python(self, exclude_none=True, by_alias=True))
 
     @classmethod
     def from_dict(cls, value: dict[str, Any]) -> Self:
-        return TypeAdapter(cls).validate_python(value, by_alias=True, by_name=True)
+        return _type_adapter(cls).validate_python(value, by_alias=True, by_name=True)
 
 
 @dataclass
@@ -65,7 +73,8 @@ class _HaloIdMixin(_HaloConfigMixin):
     """
 
     # This is kw_only to ensure that it is placed at the end of constructor's of classes that inherit from this one
-    id_: UUID | str = Field(serialization_alias="id", validation_alias="id", default_factory=uuid4, kw_only=True)
+    # Accepting both names with `AliasChoices` keeps "id_" as the constructor argument for type checkers, unlike a plain alias
+    id_: UUID | str = Field(serialization_alias="id", validation_alias=AliasChoices("id", "id_"), default_factory=uuid4, kw_only=True)
 
     @property
     def uuid_id(self) -> UUID:
@@ -97,6 +106,23 @@ class _HaloIdMixin(_HaloConfigMixin):
         return id_
 
 
+def _type_discriminator(value: object) -> str | None:
+    """Get the type of an event or update, so the union member for it is chosen by its type rather than its fields.
+
+    Returns:
+        The `type` of serialized data, or the `type_` of an object
+    """
+    if isinstance(value, dict):
+        return value.get("type")
+    return getattr(value, "type_", None)
+
+
+# Constraints shared by `Button` and `UpdateButton`
+ButtonTitle = Annotated[str, Field(min_length=BUTTON_TITLE_MIN_LENGTH, max_length=BUTTON_TITLE_MAX_LENGTH)]
+ButtonSubtitle = Annotated[str, Field(min_length=BUTTON_SUBTITLE_MIN_LENGTH, max_length=BUTTON_SUBTITLE_MAX_LENGTH)]
+ButtonValue = Annotated[int, Field(ge=MIN_VALUE, le=MAX_VALUE)]
+
+
 class UpdateTypes(StrEnum):
     """Values present in the `type` members of Update classes."""
 
@@ -124,6 +150,7 @@ class Icons(StrEnum):
     ALARM = "alarm"
     ALTERNATIVE = "alternative"
     ARM_AWAY = "arm_away"
+    ARM_INSTANT = "arm_instant"
     ARM_STAY = "arm_stay"
     AUTO = "auto"
     BATH_TUB = "bath_tub"
@@ -234,12 +261,24 @@ class Button(_HaloIdMixin):
 
     """
 
-    title: str = Field(min_length=BUTTON_TITLE_MIN_LENGTH, max_length=BUTTON_TITLE_MAX_LENGTH)
-    content: Icon | Text = Field()
-    subtitle: str | None = Field(default=None, min_length=BUTTON_SUBTITLE_MIN_LENGTH, max_length=BUTTON_SUBTITLE_MAX_LENGTH)
-    value: int | None = Field(default=None, ge=MIN_VALUE, le=MAX_VALUE)
+    title: ButtonTitle
+    content: Icon | Text
+    subtitle: ButtonSubtitle | None = None
+    value: ButtonValue | None = None
     state: ButtonState | None = None
     default: bool | None = False
+
+
+def _check_single_default(buttons: list[Button]) -> None:
+    """Check that at most one of the buttons is the default button.
+
+    Raises:
+        ValueError: More than 1 default button
+    """
+    default_buttons = [button for button in buttons if button.default is True]
+    if len(default_buttons) > 1:
+        msg = f"Only a single Button can be default per configuration. Default buttons found {default_buttons}"
+        raise ValueError(msg)
 
 
 @dataclass
@@ -258,19 +297,12 @@ class Page(_HaloIdMixin):
     @field_validator("buttons", mode="after")
     @classmethod
     def valid_default(cls, buttons: list[Button]) -> list[Button]:
-        """Check if provided buttons only contain at most 1 default button.
+        """Check if provided buttons only contain at most 1 default button, raising a `ValueError` otherwise.
 
         Returns:
             Defined buttons
-
-        Raises:
-            ValueError: More than 1 default button
         """
-        default_buttons = [button for button in buttons if button.default is True]
-
-        if len(default_buttons) > 1:
-            msg = f"Only a single Button can be default per configuration. Default buttons found {default_buttons}"
-            raise ValueError(msg)
+        _check_single_default(buttons)
         return buttons
 
 
@@ -285,26 +317,17 @@ class Configuration(_HaloIdMixin):
     """
 
     pages: list[Page] = Field(min_length=MIN_PAGES, max_length=MAX_PAGES)
-    version: str = Field(VERSION, init=False)
+    version: str = Field(API_VERSION, init=False)
 
     @field_validator("pages", mode="after")
     @classmethod
     def valid_default(cls, pages: list[Page]) -> list[Page]:
-        """Check if provided pages only contain at most 1 default button.
+        """Check if provided pages only contain at most 1 default button, raising a `ValueError` otherwise.
 
         Returns:
             Defined pages
-
-        Raises:
-            ValueError: More than 1 default button
         """
-        default_buttons: list[Button] = []
-        for page in pages:
-            default_buttons.extend(button for button in page.buttons if button.default is True)
-
-        if len(default_buttons) > 1:
-            msg = f"Only a single Button can be default per configuration. Default buttons found {default_buttons}"
-            raise ValueError(msg)
+        _check_single_default([button for page in pages for button in page.buttons])
         return pages
 
 
@@ -384,9 +407,12 @@ class StatusEvent(_HaloConfigMixin):
     Invalid button id referenced while sending `UpdateButton`:
         `message: 'The button id was not found the the configuration: <id>, state: 'error'`
 
-    Invalid page and button ids referenced while sending `UpdateDisplayPage`:
-        `message: 'homeautomationsystem::message::Update|homeautomationsystem::schema::Update::UpdateProperty [No oneof found] {'page_id':'<page_id>', 'button_id':'<page_id>', 'type':'displaypage'}', state: 'error'`
-    """  # noqa: E501
+    Invalid page id referenced while sending `UpdateDisplayPage`:
+        `message: 'The page id was not found the the configuration: <id>', state: 'error'`
+
+    Invalid configuration, e.g. with an unknown icon:
+        `message: 'homeautomationsystem::message::Configuration|homeautomationsystem::schema::Button::Content [No oneof found] {"icon":"<icon>"}', state: 'error'`
+    """  # ruff: ignore[line-too-long]
 
     state: StatusEventState
     message: str | None = None
@@ -442,11 +468,21 @@ class WheelEvent(_HaloIdMixin):
     type_: Literal[EventTypes.WHEEL] = Field(default=EventTypes.WHEEL, serialization_alias="type", init=False)
 
 
+EventType = WheelEvent | SystemEvent | StatusEvent | PowerEvent | ButtonEvent
+
+
 @dataclass
 class Event(_HaloConfigMixin):
     """Base Event class."""
 
-    event: WheelEvent | SystemEvent | StatusEvent | PowerEvent | ButtonEvent
+    event: Annotated[
+        Annotated[WheelEvent, Tag(EventTypes.WHEEL)]
+        | Annotated[SystemEvent, Tag(EventTypes.SYSTEM)]
+        | Annotated[StatusEvent, Tag(EventTypes.STATUS)]
+        | Annotated[PowerEvent, Tag(EventTypes.POWER)]
+        | Annotated[ButtonEvent, Tag(EventTypes.BUTTON)],
+        Discriminator(_type_discriminator),
+    ]
 
 
 @dataclass
@@ -464,9 +500,9 @@ class UpdateButton(_HaloIdMixin):
     """
 
     state: ButtonState | None = None
-    value: int | None = Field(default=None, ge=MIN_VALUE, le=MAX_VALUE)
-    title: str | None = Field(default=None, min_length=BUTTON_TITLE_MIN_LENGTH, max_length=BUTTON_TITLE_MAX_LENGTH)
-    subtitle: str | None = Field(default=None, min_length=BUTTON_SUBTITLE_MIN_LENGTH, max_length=BUTTON_SUBTITLE_MAX_LENGTH)
+    value: ButtonValue | None = None
+    title: ButtonTitle | None = None
+    subtitle: ButtonSubtitle | None = None
     content: Text | Icon | None = None
     type_: Literal[UpdateTypes.BUTTON] = Field(default=UpdateTypes.BUTTON, serialization_alias="type", init=False)
 
@@ -482,8 +518,9 @@ class UpdateDisplayPage(_HaloConfigMixin):
         button_id: UUID of button in page to display
     """
 
-    page_id: UUID = Field(serialization_alias="pageid")
-    button_id: UUID | None = Field(default=None, serialization_alias="buttonid")
+    # The serialized names are also accepted when validating, so updates can be deserialized
+    page_id: UUID = Field(serialization_alias="pageid", validation_alias=AliasChoices("pageid", "page_id"))
+    button_id: UUID | None = Field(default=None, serialization_alias="buttonid", validation_alias=AliasChoices("buttonid", "button_id"))
     type_: Literal[UpdateTypes.DISPLAY_PAGE] = Field(default=UpdateTypes.DISPLAY_PAGE, serialization_alias="type", init=False)
 
 
@@ -499,7 +536,7 @@ class UpdateNotification(_HaloIdMixin):
     """
 
     title: str | None = Field(default=None, min_length=NOTIFICATION_TITLE_MIN_LENGTH, max_length=NOTIFICATION_TITLE_MAX_LENGTH)
-    message: str | None = Field(default=None, serialization_alias="subtitle")
+    message: str | None = Field(default=None, serialization_alias="subtitle", validation_alias=AliasChoices("subtitle", "message"))
     type_: Literal[UpdateTypes.NOTIFICATION] = Field(default=UpdateTypes.NOTIFICATION, serialization_alias="type", init=False)
 
     @field_validator("message", mode="after")
@@ -515,17 +552,18 @@ class UpdateNotification(_HaloIdMixin):
         """
         if message is not None:
             # Overall length
-            if (message_length := len(message)) and message_length > NOTIFICATION_SUBTITLE_MAX_LENGTH:
-                msg = f"Defined message contains too many characters. Valid range: {NOTIFICATION_SUBTITLE_MIN_LENGTH}..{NOTIFICATION_SUBTITLE_MAX_LENGTH}"  # noqa: E501
+            if len(message) > NOTIFICATION_SUBTITLE_MAX_LENGTH:
+                msg = f"Defined message contains too many characters. Valid range: {NOTIFICATION_SUBTITLE_MIN_LENGTH}..{NOTIFICATION_SUBTITLE_MAX_LENGTH}"  # ruff: ignore[line-too-long]
                 raise ValueError(msg)
             # Number of lines
-            if (message_lines := message.splitlines()) and len(message_lines) > NOTIFICATION_SUBTITLE_MAX_LINES:
-                msg = f"Defined message contains too many lines: {len(message_lines)}. Valid range: {NOTIFICATION_SUBTITLE_MIN_LINES}..{NOTIFICATION_SUBTITLE_MAX_LINES}"  # noqa: E501
+            message_lines = message.splitlines()
+            if len(message_lines) > NOTIFICATION_SUBTITLE_MAX_LINES:
+                msg = f"Defined message contains too many lines: {len(message_lines)}. Valid range: {NOTIFICATION_SUBTITLE_MIN_LINES}..{NOTIFICATION_SUBTITLE_MAX_LINES}"  # ruff: ignore[line-too-long]
                 raise ValueError(msg)
             # Length of each line
             for line in message_lines:
-                if (line_length := len(line)) and line_length > NOTIFICATION_SUBTITLE_MAX_LINE_LENGTH:
-                    msg = f"Defined message contains a line with too many characters: {line_length}. Valid range: {NOTIFICATION_SUBTITLE_MIN_LINE_LENGTH}..{NOTIFICATION_SUBTITLE_MAX_LINE_LENGTH}"  # noqa: E501
+                if (line_length := len(line)) > NOTIFICATION_SUBTITLE_MAX_LINE_LENGTH:
+                    msg = f"Defined message contains a line with too many characters: {line_length}. Valid range: {NOTIFICATION_SUBTITLE_MIN_LINE_LENGTH}..{NOTIFICATION_SUBTITLE_MAX_LINE_LENGTH}"  # ruff: ignore[line-too-long]
                     raise ValueError(msg)
 
         return message
@@ -535,13 +573,15 @@ class UpdateNotification(_HaloIdMixin):
 class Update(_HaloConfigMixin):
     """An update to be sent to the Beoremote Halo."""
 
-    update: UpdateButton | UpdateDisplayPage | UpdateNotification
+    update: Annotated[
+        Annotated[UpdateButton, Tag(UpdateTypes.BUTTON)]
+        | Annotated[UpdateDisplayPage, Tag(UpdateTypes.DISPLAY_PAGE)]
+        | Annotated[UpdateNotification, Tag(UpdateTypes.NOTIFICATION)],
+        Discriminator(_type_discriminator),
+    ]
 
 
 class BaseWebSocketResponse(TypedDict):
     """Base class for serialized WebSocket events."""
 
     event: dict
-
-
-EventType = WheelEvent | SystemEvent | StatusEvent | PowerEvent | ButtonEvent

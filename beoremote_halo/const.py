@@ -2,8 +2,9 @@
 
 from typing import Final
 
-VERSION: Final = "1.0.1"
+API_VERSION: Final = "1.0.2"
 
+WEBSOCKET_PORT: Final = 8080
 WEBSOCKET_TIMEOUT: Final = 5.0
 
 MIN_VALUE: Final = 0

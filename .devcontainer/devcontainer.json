@@ -2,6 +2,7 @@
   "name": "beoremote_halo",
   "postCreateCommand": ".devcontainer/postInstall.sh",
   "dockerFile": "./Dockerfile",
+  "remoteUser": "vscode",
   "customizations": {
     "vscode": {
       "extensions": [

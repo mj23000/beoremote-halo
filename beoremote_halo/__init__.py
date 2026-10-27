@@ -1,6 +1,7 @@
 """Beoremote Halo client."""
 
 from beoremote_halo.const import (
+    API_VERSION,
     BUTTON_CONTENT_TEXT_MAX_LENGTH,
     BUTTON_CONTENT_TEXT_MIN_LENGTH,
     BUTTON_SUBTITLE_MAX_LENGTH,
@@ -25,12 +26,12 @@ from beoremote_halo.const import (
     NOTIFICATION_TITLE_MIN_LENGTH,
     PAGE_TITLE_MAX_LENGTH,
     PAGE_TITLE_MIN_LENGTH,
-    VERSION,
+    WEBSOCKET_PORT,
     WEBSOCKET_TIMEOUT,
     WHEEL_COUNTS_MAX,
     WHEEL_COUNTS_MIN,
 )
-from beoremote_halo.halo import Halo
+from beoremote_halo.halo import ConnectionState, Halo
 from beoremote_halo.helpers import (
     clear_default_button,
     delete_button,
@@ -84,6 +85,7 @@ from beoremote_halo.util import (
 __version__ = "2.0.0"
 
 __all__ = [
+    "API_VERSION",
     "BUTTON_CONTENT_TEXT_MAX_LENGTH",
     "BUTTON_CONTENT_TEXT_MIN_LENGTH",
     "BUTTON_SUBTITLE_MAX_LENGTH",
@@ -108,7 +110,7 @@ __all__ = [
     "NOTIFICATION_TITLE_MIN_LENGTH",
     "PAGE_TITLE_MAX_LENGTH",
     "PAGE_TITLE_MIN_LENGTH",
-    "VERSION",
+    "WEBSOCKET_PORT",
     "WEBSOCKET_TIMEOUT",
     "WHEEL_COUNTS_MAX",
     "WHEEL_COUNTS_MIN",
@@ -119,6 +121,7 @@ __all__ = [
     "ButtonEventState",
     "ButtonState",
     "Configuration",
+    "ConnectionState",
     "Event",
     "EventType",
     "EventTypes",

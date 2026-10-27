@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from beoremote_halo import MAX_VALUE, MIN_VALUE
+from beoremote_halo.const import MAX_VALUE, MIN_VALUE
 from beoremote_halo.models import BaseConfiguration, Button, ButtonState, Icon, Page, Text
 
 
@@ -10,8 +10,7 @@ from beoremote_halo.models import BaseConfiguration, Button, ButtonState, Icon, 
 def clear_default_button(configuration: BaseConfiguration) -> None:
     """Remove the default flag from a configuration if present."""
     if (button := get_default_button(configuration)) is not None:
-        page_idx, button_idx = get_button_indices(configuration, button.uuid_id)
-        configuration.configuration.pages[page_idx].buttons[button_idx].default = False
+        button.default = False
 
 
 def update_button(
@@ -31,27 +30,28 @@ def update_button(
     Raises:
         ValueError: value is outside the valid range og 0-100 or multiple default buttons have been defined
     """
-    # Get button's indices to modify values in configuration
+    # Looked up by indices for their error message, buttons are modified in place
     page_idx, button_idx = get_button_indices(configuration, id_)
+    button = configuration.configuration.pages[page_idx].buttons[button_idx]
 
     if title is not None:
-        configuration.configuration.pages[page_idx].buttons[button_idx].title = title
+        button.title = title
     if content is not None:
-        configuration.configuration.pages[page_idx].buttons[button_idx].content = content
+        button.content = content
     if subtitle is not None:
-        configuration.configuration.pages[page_idx].buttons[button_idx].subtitle = subtitle
+        button.subtitle = subtitle
     if value is not None:
         if value < MIN_VALUE or value > MAX_VALUE:
             msg = f"Invalid button value: {value}. Button value must be in the range: {MIN_VALUE}-{MAX_VALUE}"
             raise ValueError(msg)
-        configuration.configuration.pages[page_idx].buttons[button_idx].value = value
+        button.value = value
     if state is not None:
-        configuration.configuration.pages[page_idx].buttons[button_idx].state = state
+        button.state = state
     if default is not None:
-        if default is True and (button := get_default_button(configuration)) and button.uuid_id != id_:
-            msg = f"Default button already defined: {button}. Clear existing default button before setting new one"
+        if default is True and (default_button := get_default_button(configuration)) and default_button.uuid_id != id_:
+            msg = f"Default button already defined: {default_button}. Clear existing default button before setting new one"
             raise ValueError(msg)
-        configuration.configuration.pages[page_idx].buttons[button_idx].default = default
+        button.default = default
 
 
 def update_page(
@@ -63,14 +63,26 @@ def update_page(
     """Update a `Page`s attributes.
 
     Attributes that are set to `None` are left unmodified.
+
+    Raises:
+        ValueError: A default button is set while another page already has a default button
     """
-    # Get page index
-    page_idx = get_page_index(configuration, id_)
+    page = configuration.configuration.pages[get_page_index(configuration, id_)]
+
+    # Checked before anything is modified. The page's current buttons are replaced, so only a default button on another page conflicts
+    if (
+        buttons is not None
+        and any(button.default is True for button in buttons)
+        and (default_button := get_default_button(configuration)) is not None
+        and default_button not in page.buttons
+    ):
+        msg = f"Default button already defined: {default_button}. Clear existing default button before setting new one"
+        raise ValueError(msg)
 
     if title is not None:
-        configuration.configuration.pages[page_idx].title = title
+        page.title = title
     if buttons is not None:
-        configuration.configuration.pages[page_idx].buttons = buttons
+        page.buttons = buttons
 
 
 def delete_button(configuration: BaseConfiguration, id_: UUID) -> None:

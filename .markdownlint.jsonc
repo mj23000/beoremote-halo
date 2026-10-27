@@ -1,0 +1,9 @@
+// Configuration for markdownlint, used by the VS Code extension and markdownlint-cli2
+{
+  // Prose isn't wrapped, as in the default configuration of the VS Code extension
+  "MD013": false,
+  // HTML is only used to size images, which Markdown can't do
+  "MD033": {
+    "allowed_elements": ["img"]
+  }
+}

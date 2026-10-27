@@ -1,18 +1,17 @@
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v3.2.0
+    rev: v6.0.0
     hooks:
+      # Generated documentation is kept exactly as generated
       - id: trailing-whitespace
+        exclude: ^docs/index\.html$
       - id: end-of-file-fixer
+        exclude: ^docs/index\.html$
       - id: check-yaml
       - id: name-tests-test
-
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.13
-    hooks:
-      - id: ruff
-        args: [--fix]
-      - id: ruff-format
+        args: [--pytest-test-first]
+        # Shared test helpers, not tests
+        exclude: ^tests/(const|fake_halo)\.py$
 
   - repo: https://github.com/klieret/jekyll-relative-url-check
     rev: v2.0.1
@@ -20,7 +19,28 @@ repos:
       - id: jekyll-relative-url-check-html
       - id: jekyll-relative-url-check-markdown
 
-  - repo: https://github.com/allganize/ty-pre-commit
-    rev: v0.0.38
+  # Uses the rules in .markdownlint.jsonc, like the VS Code extension
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: v0.23.3
     hooks:
-      - id: ty-check
+      - id: markdownlint-cli2
+
+  # Run in the project environment, using the versions pinned in pyproject.toml. This also lets ty resolve the project's dependencies
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: uv run ruff check --fix
+        language: system
+        types_or: [python, pyi]
+      - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format
+        language: system
+        types_or: [python, pyi]
+      - id: ty
+        name: ty check
+        entry: uv run ty check
+        language: system
+        types: [python]
+        pass_filenames: false

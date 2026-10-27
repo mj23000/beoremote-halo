@@ -42,17 +42,6 @@ from tests.const import (
     UNUSED_PAGE,
 )
 
-
-@pytest.fixture
-def configuration() -> BaseConfiguration:
-    """Example configuration for testing.
-
-    Returns:
-        Example config
-    """
-    return copy.deepcopy(CONFIGURATION)
-
-
 # Test configuration getters
 
 
@@ -293,6 +282,55 @@ def test_update_page(configuration: BaseConfiguration) -> None:
     assert configuration.configuration.pages[0] != DINING_ROOM_PAGE
     assert configuration.configuration.pages[0].title == new_values.title
     assert configuration.configuration.pages[0].buttons == new_values.buttons
+
+
+@pytest.mark.parametrize(
+    argnames=("page_id", "default", "expected_error"),
+    ids=(
+        "replace_page_with_default",
+        "default_on_other_page",
+        "no_default",
+    ),
+    argvalues=[
+        (DINING_ROOM_PAGE.uuid_id, True, does_not_raise()),
+        (
+            GARAGE_PAGE.uuid_id,
+            True,
+            pytest.raises(
+                ValueError,
+                match=re.escape(
+                    f"Default button already defined: {CHANDELIER_BUTTON}. Clear existing default button before setting new one",
+                ),
+            ),
+        ),
+        (GARAGE_PAGE.uuid_id, False, does_not_raise()),
+    ],
+)
+def test_update_page_default(
+    configuration: BaseConfiguration,
+    page_id: UUID,
+    default: bool,
+    expected_error: AbstractContextManager,
+) -> None:
+    """Test `update_page` with buttons that include a default button."""
+    buttons = [Button("New button", Icon(Icons.BATH_TUB), default=default)]
+    original_page = copy.deepcopy(get_page_from_id(configuration, page_id))
+
+    with expected_error:
+        update_page(configuration, page_id, "New title", buttons)
+        assert get_page_from_id(configuration, page_id).buttons == buttons
+
+    # Never more than one default button, and a rejected update leaves the page unchanged
+    assert sum(button.default is True for button in get_all_buttons(configuration)) <= 1
+    if not isinstance(expected_error, does_not_raise):
+        assert get_page_from_id(configuration, page_id) == original_page
+
+
+def test_update_page_without_changes(configuration: BaseConfiguration) -> None:
+    """Test that `update_page` leaves attributes set to `None` unmodified."""
+    update_page(configuration, DINING_ROOM_PAGE.uuid_id)
+
+    assert configuration.configuration.pages[0] == DINING_ROOM_PAGE
 
 
 @pytest.mark.parametrize(

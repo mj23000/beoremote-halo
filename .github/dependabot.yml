@@ -1,0 +1,28 @@
+version: 2
+
+updates:
+  # Keeps the commit hashes, and version comments, of the actions used in workflows up to date
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    # Only propose releases that have been available for at least two weeks
+    cooldown:
+      default-days: 14
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+
+  # Updates the dependencies in pyproject.toml and uv.lock
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+    # Matches exclude-newer in pyproject.toml
+    cooldown:
+      default-days: 14
+    groups:
+      # Pinned development tools are updated together. Library dependencies get a pull request each
+      dev-dependencies:
+        dependency-type: development

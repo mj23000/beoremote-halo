@@ -6,11 +6,11 @@ authors = [{ name = "Bang & Olufsen", email = "support@bang-olufsen.dk" }]
 readme = "README.md"
 keywords = ["AsyncAPI", "Halo API"]
 requires-python = ">=3.11"
+# Minimum versions are verified in CI. aiohttp and zeroconf require the first releases without known vulnerabilities
 dependencies = [
-    "aioconsole>=0.4.1",
-    "aiohttp>=3.11.0,<4.0.0",
-    "pydantic>=2.13.4",
-    "zeroconf>=0.25.1,<1.0.0",
+    "aiohttp>=3.14.4,<4",
+    "pydantic>=2.13.4,<3",
+    "zeroconf>=0.149.16,<1",
 ]
 
 classifiers = [
@@ -31,26 +31,38 @@ repository = "https://github.com/bang-olufsen/beoremote-halo"
 "Bug Tracker" = "https://github.com/bang-olufsen/beoremote-halo/issues"
 
 [project.scripts]
-halo_api = "halo_api.halo_cli:HaloApiCli"
+beoremote-halo = "beoremote_halo.cli:main"
 
 [dependency-groups]
+# Pinned for reproducible checks. Also used by the hooks in .pre-commit-config.yaml
 dev = [
-    "prek>=0.4.1",
-    "pytest>=9.0.3",
-    "pytest-aiohttp>=1.1.1",
-    "pytest-asyncio>=1.4.0",
-    "pytest-cov>=7.1.0",
-    "ruff==0.15.13",
-    "ty==0.0.38",
+    "prek==0.5.5",
+    "pytest==9.1.1",
+    "pytest-aiohttp==1.1.1",
+    "pytest-asyncio==1.4.0",
+    "pytest-cov==7.1.0",
+    "ruff==0.17.0",
+    "ty==0.0.86",
 ]
 
 
 [build-system]
-requires = ["uv_build >= 0.11.5, <0.12.0"]
+requires = ["uv_build>=0.13.0,<0.14"]
 build-backend = "uv_build"
 
 [tool.pytest]
 asyncio_mode = "auto"
+filterwarnings = [
+    "error",
+]
+
+[tool.coverage.run]
+source = ["beoremote_halo"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 100
+show_missing = true
 
 
 [tool.ruff]
@@ -64,31 +76,37 @@ preview = true
 
 select = [
     "ALL",
-    "DOC102",
-    "DOC201",
-    "DOC202",
-    "DOC402",
-    "DOC403",
-    "DOC501",
-    "DOC502",
+    "docstring-extraneous-parameter",
+    "docstring-missing-returns",
+    "docstring-extraneous-returns",
+    "docstring-missing-yields",
+    "docstring-extraneous-yields",
+    "docstring-missing-exception",
+    "docstring-extraneous-exception",
 ]
 ignore = [
-    "FBT001",
-    "FBT002",
-    "FBT003",
-    "PLR0913",
-    "D203",
-    "D213",
-    "CPY001",
-    "D413",
-    "PLR0917",
+    "boolean-type-hint-positional-argument",
+    "boolean-default-value-positional-argument",
+    "boolean-positional-value-in-call",
+    "too-many-arguments",
+    "incorrect-blank-line-before-class",
+    "multi-line-summary-second-line",
+    "missing-copyright-notice",
+    "missing-blank-line-after-last-section",
+    "too-many-positional-arguments",
 ]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S101"]
+"tests/*" = ["assert"]
+# The CLI prints its output
+"beoremote_halo/cli/*" = ["print"]
+
+[tool.uv]
+# Only use releases that have been available for at least two weeks, like Dependabot's cooldown
+exclude-newer = "2 weeks"
 
 [tool.uv.build-backend]
 module-root = ""

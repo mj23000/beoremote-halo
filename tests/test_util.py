@@ -1,11 +1,13 @@
 """Test helper functions for button values located in `beoremote_halo/util.py`."""
 
+import string
+from collections.abc import Callable
+
 import pytest
 
 from beoremote_halo import MAX_VALUE, MIN_VALUE
 from beoremote_halo.const import BUTTON_CONTENT_TEXT_MAX_LENGTH, BUTTON_SUBTITLE_MAX_LENGTH, BUTTON_TITLE_MAX_LENGTH, PAGE_TITLE_MAX_LENGTH
 from beoremote_halo.util import (
-    check_valid_serial_number,
     clamp_button_value,
     interpolate_button_value,
     trim_button_subtitle,
@@ -59,109 +61,25 @@ def test_interpolate_button_value(value: int, min_value: int, max_value: int, ex
     assert interpolate_button_value(value, min_value, max_value) == expected_value
 
 
-@pytest.mark.parametrize(
-    argnames=("text", "expected_text"),
-    ids=(
-        "at_limit",
-        "under_limit",
-        "above_limit",
-        "no_value",
-    ),
-    argvalues=[
-        ("abcdef", "abcdef"),
-        ("abcde", "abcde"),
-        ("abcdefg", "abcdef"),
-        ("", ""),
-    ],
-)
-def test_trim_button_text(text: str, expected_text: str) -> None:
-    """Test `trim_button_text`."""
-    trimmed = trim_button_text(text)
-    assert trimmed == expected_text
-    assert len(trimmed) <= BUTTON_CONTENT_TEXT_MAX_LENGTH
+# Longer than any of the length limits
+TEXT = string.ascii_letters
 
 
 @pytest.mark.parametrize(
-    argnames=("text", "expected_text"),
-    ids=(
-        "at_limit",
-        "under_limit",
-        "above_limit",
-        "no_value",
-    ),
+    argnames=("trim", "max_length"),
+    ids=("button_text", "button_subtitle", "button_title", "page_title"),
     argvalues=[
-        ("abcdefhijklmnop", "abcdefhijklmnop"),
-        ("abcdefhijklmno", "abcdefhijklmno"),
-        ("abcdefhijklmnopq", "abcdefhijklmnop"),
-        ("", ""),
+        (trim_button_text, BUTTON_CONTENT_TEXT_MAX_LENGTH),
+        (trim_button_subtitle, BUTTON_SUBTITLE_MAX_LENGTH),
+        (trim_button_title, BUTTON_TITLE_MAX_LENGTH),
+        (trim_page_title, PAGE_TITLE_MAX_LENGTH),
     ],
 )
-def test_trim_button_subtitle(text: str, expected_text: str) -> None:
-    """Test `trim_button_subtitle`."""
-    trimmed = trim_button_subtitle(text)
-    assert trimmed == expected_text
-    assert len(trimmed) <= BUTTON_SUBTITLE_MAX_LENGTH
+def test_trim(trim: Callable[[str], str], max_length: int) -> None:
+    """Test that the trim functions shorten text above their length limit, and leave other text unchanged."""
+    at_limit = TEXT[:max_length]
 
-
-@pytest.mark.parametrize(
-    argnames=("text", "expected_text"),
-    ids=(
-        "at_limit",
-        "under_limit",
-        "above_limit",
-        "no_value",
-    ),
-    argvalues=[
-        ("abcdefhijklmnop", "abcdefhijklmnop"),
-        ("abcdefhijklmno", "abcdefhijklmno"),
-        ("abcdefhijklmnopq", "abcdefhijklmnop"),
-        ("", ""),
-    ],
-)
-def test_trim_button_title(text: str, expected_text: str) -> None:
-    """Test `trim_button_title`."""
-    trimmed = trim_button_title(text)
-    assert trimmed == expected_text
-    assert len(trimmed) <= BUTTON_TITLE_MAX_LENGTH
-
-
-@pytest.mark.parametrize(
-    argnames=("text", "expected_text"),
-    ids=(
-        "at_limit",
-        "under_limit",
-        "above_limit",
-        "no_value",
-    ),
-    argvalues=[
-        ("String for unit testing Beoremote Halo-", "String for unit testing Beoremote Halo-"),
-        ("String for unit testing Beoremote Halo", "String for unit testing Beoremote Halo"),
-        ("This is a string for unit testing Beoremote Halo", "This is a string for unit testing Beorem"),
-        ("", ""),
-    ],
-)
-def test_trim_page_title(text: str, expected_text: str) -> None:
-    """Test `trim_page_title`."""
-    trimmed = trim_page_title(text)
-    assert trimmed == expected_text
-    assert len(trimmed) <= PAGE_TITLE_MAX_LENGTH
-
-
-@pytest.mark.parametrize(
-    argnames=("serial_number", "expected_result"),
-    ids=(
-        "valid",
-        "invalid_too_short",
-        "invalid_too_long",
-        "invalid_str",
-    ),
-    argvalues=[
-        ("12345678", True),
-        ("1234567", False),
-        ("123456789", False),
-        ("Notvalid", False),
-    ],
-)
-def test_check_valid_serial_number(serial_number: str, expected_result: str) -> None:
-    """Test `check_valid_serial_number`."""
-    assert check_valid_serial_number(serial_number) == expected_result
+    assert trim(at_limit) == at_limit
+    assert trim(at_limit[:-1]) == at_limit[:-1]
+    assert trim(TEXT[: max_length + 1]) == at_limit
+    assert not trim("")
