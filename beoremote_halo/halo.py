@@ -8,7 +8,7 @@ import json
 import logging
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from enum import StrEnum
-from typing import Any, Final
+from typing import Any, Final, ParamSpec, TypeAlias
 
 from aiohttp import ClientError, ClientSession, ClientWebSocketResponse, WSMsgType
 
@@ -30,6 +30,10 @@ from beoremote_halo.models import (
     WheelEvent,
 )
 
+_P = ParamSpec("_P")
+# Callback set by the user, which can be sync or async
+_Callback: TypeAlias = Callable[_P, Awaitable[None] | None]
+
 # Message of the `StatusEvent` sent by the Halo when it accepts a configuration
 _CONFIGURATION_ACCEPTED_MESSAGE: Final = "configuration"
 # Starts of the message in the `StatusEvent` sent by the Halo when it rejects a configuration. The first is sent by
@@ -38,6 +42,8 @@ _INVALID_CONFIGURATION_MESSAGES: Final = (
     "homeautomationsystem::message::configuration",
     "invalid configuration",
 )
+# Message types received when the WebSocket connection isn't usable
+_CLOSED_MESSAGE_TYPES: Final = frozenset({WSMsgType.CLOSE, WSMsgType.CLOSING, WSMsgType.CLOSED, WSMsgType.ERROR})
 
 
 def _empty_configuration() -> BaseConfiguration:
@@ -79,32 +85,32 @@ class Halo:
         """
         self.host = host
         self.websocket_reconnect = False
+        self._url = f"ws://{host}:{port}/"
+        self._session = session
+        self._logger = logging.getLogger(__name__)
 
         self._configuration = _empty_configuration() if configuration is None else configuration
-        # Set when the Halo rejects the configuration, which stops reconnecting until a new configuration is set
-        self._configuration_rejected = False
         # If the configuration is sent on each (re)connect, set by `connect`
         self._send_configuration = True
         # If the Halo has accepted the configuration on the current connection
         self._configuration_accepted = False
-        self._url = f"ws://{host}:{port}/"
-        self._session = session
+        # Set when the Halo rejects the configuration, which stops reconnecting until a new configuration is set
+        self._configuration_rejected = False
 
         self._state = ConnectionState.DISCONNECTED
         self._websocket_task: asyncio.Task[None] | None = None
+        # Awaited by `connect` until the first connection attempt of the current connection task has finished
+        self._first_attempt: asyncio.Future[None] | None = None
         # Reader and writer tasks of the current connection
         self._io_tasks: set[asyncio.Task[None]] = set()
+        # Data waiting to be sent on the current connection
         self._queue: asyncio.Queue[str] = asyncio.Queue()
 
-        self._on_connection_lost: Callable[[], Awaitable[None] | None] | None = None
-        self._on_connection: Callable[[], Awaitable[None] | None] | None = None
-
-        self._on_all_events: Callable[[EventType, EventTypes], Awaitable[None] | None] | None = None
-        self._on_all_events_raw: Callable[[dict[str, Any]], Awaitable[None] | None] | None = None
-
-        self._event_callbacks: dict[EventTypes, Callable[[Any], Awaitable[None] | None]] = {}
-
-        self._logger = logging.getLogger(__name__)
+        self._on_connection: _Callback[[]] | None = None
+        self._on_connection_lost: _Callback[[]] | None = None
+        self._on_all_events: _Callback[[EventType, EventTypes]] | None = None
+        self._on_all_events_raw: _Callback[[dict[str, Any]]] | None = None
+        self._event_callbacks: dict[EventTypes, _Callback[[Any]]] = {}
 
     @property
     def connection_state(self) -> ConnectionState:
@@ -115,24 +121,6 @@ class Halo:
     def websocket_connected(self) -> bool:
         """If the WebSocket connection is currently established."""
         return self._state is ConnectionState.CONNECTED
-
-    def _send_data(self, data: BaseConfiguration | Update) -> bool:
-        """Send data to the Beoremote Halo.
-
-        Data is only queued while connected, so nothing stale is sent after a reconnect.
-
-        Args:
-            data: `Configuration` or `Update` to send
-
-        Returns:
-            If the data was successfully put into WebSocket queue
-        """
-        if not self.websocket_connected:
-            self._logger.debug("Not connected, unable to send data: %s", data)
-            return False
-
-        self._queue.put_nowait(data.to_json())
-        return True
 
     @property
     def configuration(self) -> BaseConfiguration:
@@ -186,7 +174,6 @@ class Halo:
             If the update was successfully put into WebSocket queue
         """
         if update_configuration and isinstance(update.update, UpdateButton):
-            # Update button in configuration
             update_button(
                 self._configuration,
                 update.update.uuid_id,
@@ -198,6 +185,24 @@ class Halo:
             )
 
         return self._send_data(update)
+
+    def _send_data(self, data: BaseConfiguration | Update) -> bool:
+        """Send data to the Beoremote Halo.
+
+        Data is only queued while connected, so nothing stale is sent after a reconnect.
+
+        Args:
+            data: `Configuration` or `Update` to send
+
+        Returns:
+            If the data was successfully put into WebSocket queue
+        """
+        if not self.websocket_connected:
+            self._logger.debug("Not connected, unable to send data: %s", data)
+            return False
+
+        self._queue.put_nowait(data.to_json())
+        return True
 
     async def check_device_connection(self, raise_error: bool = False) -> bool:
         """Check WebSocket connection.
@@ -227,12 +232,7 @@ class Halo:
             self._logger.exception("Unable to connect to %s", self.host)
             return False
 
-        return message.type not in {
-            WSMsgType.CLOSE,
-            WSMsgType.CLOSING,
-            WSMsgType.CLOSED,
-            WSMsgType.ERROR,
-        }
+        return message.type not in _CLOSED_MESSAGE_TYPES
 
     async def connect(self, reconnect: bool = False, send_configuration: bool = True) -> None:
         """Start WebSocket connection.
@@ -258,33 +258,17 @@ class Halo:
         self._send_configuration = send_configuration
         self._configuration_rejected = False
 
-        first_attempt: asyncio.Future[None] = asyncio.get_running_loop().create_future()
-        task = asyncio.create_task(
-            coro=self._websocket_connection(first_attempt),
-            name=f"{self.host} - task",
-        )
-        task.add_done_callback(functools.partial(self._on_websocket_task_done, first_attempt))
-        self._websocket_task = task
+        self._first_attempt = asyncio.get_running_loop().create_future()
+        self._websocket_task = asyncio.create_task(self._websocket_connection(), name=f"{self.host} - task")
+        # Bound to this task's future, as a new `connect` may replace `_first_attempt` before this task has finished
+        self._websocket_task.add_done_callback(functools.partial(self._on_websocket_task_done, self._first_attempt))
 
         try:
-            await first_attempt
+            await self._first_attempt
         except asyncio.CancelledError:
             # `disconnect` was called before the first attempt finished, only the caller's own cancellation is raised
             if (current := asyncio.current_task()) is not None and current.cancelling():
                 raise
-
-    def _on_websocket_task_done(self, first_attempt: asyncio.Future[None], task: asyncio.Task[None]) -> None:
-        """Clean up after the connection task, also when it was cancelled before it started running.
-
-        Args:
-            first_attempt: Future awaited by `connect`
-            task: The finished connection task
-        """
-        first_attempt.cancel()
-
-        # Don't touch the state of a connection that has been started since
-        if self._websocket_task in {None, task}:
-            self._state = ConnectionState.DISCONNECTED
 
     async def disconnect(self) -> None:
         """Stop WebSocket connection.
@@ -312,36 +296,28 @@ class Halo:
             if current is not None and current.cancelling():
                 raise
 
-    async def _websocket_connection(self, first_attempt: asyncio.Future[None]) -> None:
-        """WebSocket connection handler.
-
-        Args:
-            first_attempt: Resolved when the first connection attempt has succeeded or failed
-        """
+    async def _websocket_connection(self) -> None:
+        """Connect, handle the connection until it ends, and reconnect if enabled."""
         while True:
-            error = await self._connect_once(first_attempt)
+            self._state = ConnectionState.CONNECTING
+            error: ClientError | TimeoutError | None = None
+            try:
+                # Increase heartbeat time to handle slow pongs better
+                async with self._connect_websocket(heartbeat=WEBSOCKET_TIMEOUT * 2) as websocket:
+                    await self._on_connected()
+                    await self._run_connection(websocket)
+            except (ClientError, TimeoutError) as connection_error:
+                error = connection_error
             await self._on_connection_ended(error)
 
             reconnect = self._should_reconnect()
-            if not first_attempt.done():
-                # Only report the failure to `connect` when no further attempts are made
-                if not reconnect and error is not None:
-                    first_attempt.set_exception(error)
-                else:
-                    first_attempt.set_result(None)
+            # Only report the failure to `connect` when no further attempts are made
+            self._finish_first_attempt(None if reconnect else error)
 
             if not reconnect:
                 return
 
             await asyncio.sleep(WEBSOCKET_TIMEOUT)
-
-    def _should_reconnect(self) -> bool:
-        """If the connection should be re-established after it has been lost.
-
-        Returns:
-            Reconnect
-        """
-        return self.websocket_reconnect and not self._configuration_rejected
 
     @contextlib.asynccontextmanager
     async def _connect_websocket(self, heartbeat: float | None = None) -> AsyncGenerator[ClientWebSocketResponse]:
@@ -360,31 +336,8 @@ class Halo:
                 websocket = await session.ws_connect(self._url, heartbeat=heartbeat)
             yield await stack.enter_async_context(websocket)
 
-    async def _connect_once(self, first_attempt: asyncio.Future[None]) -> ClientError | TimeoutError | None:
-        """Connect and handle the WebSocket connection until it is closed.
-
-        Args:
-            first_attempt: Resolved when the connection has been established
-
-        Returns:
-            The error that ended the connection, if any
-        """
-        self._state = ConnectionState.CONNECTING
-        try:
-            # Increase heartbeat time to handle slow pongs better
-            async with self._connect_websocket(heartbeat=WEBSOCKET_TIMEOUT * 2) as websocket:
-                await self._on_connected(websocket, first_attempt)
-        except (ClientError, TimeoutError) as error:
-            return error
-        return None
-
-    async def _on_connected(self, websocket: ClientWebSocketResponse, first_attempt: asyncio.Future[None]) -> None:
-        """Set up a new connection, and handle it until it is closed.
-
-        Args:
-            websocket: Established WebSocket connection
-            first_attempt: Resolved when the connection has been established
-        """
+    async def _on_connected(self) -> None:
+        """Set up state for a newly established connection and notify about it."""
         # A new queue drops data left from a previous connection. The configuration is queued first, so it precedes any updates
         self._queue = asyncio.Queue()
         self._configuration_accepted = False
@@ -392,13 +345,10 @@ class Halo:
             self._queue.put_nowait(self._configuration.to_json())
         self._state = ConnectionState.CONNECTED
 
-        if not first_attempt.done():
-            first_attempt.set_result(None)
+        self._finish_first_attempt()
 
         if self._on_connection:
             await self._trigger_callback(self._on_connection)
-
-        await self._run_connection(websocket)
 
     async def _on_connection_ended(self, error: ClientError | TimeoutError | None) -> None:
         """Reset connection state and notify about a lost connection.
@@ -416,16 +366,47 @@ class Halo:
         if self._should_reconnect():
             self._logger.debug("Lost connection to %s: %s", self._url, error)
         elif self._configuration_rejected:
-            self._logger.error(
-                "Lost connection to %s, not reconnecting as the configuration was rejected: %s",
-                self._url,
-                error,
-            )
+            self._logger.error("Lost connection to %s, not reconnecting as the configuration was rejected: %s", self._url, error)
         else:
             self._logger.error("Lost connection to %s: %s", self._url, error)
 
         if self._on_connection_lost:
             await self._trigger_callback(self._on_connection_lost)
+
+    def _should_reconnect(self) -> bool:
+        """If the connection should be re-established after it has been lost.
+
+        Returns:
+            Reconnect
+        """
+        return self.websocket_reconnect and not self._configuration_rejected
+
+    def _finish_first_attempt(self, error: ClientError | TimeoutError | None = None) -> None:
+        """Report the outcome of the first connection attempt to `connect`, later calls are ignored.
+
+        Args:
+            error: The error to raise from `connect`, if any
+        """
+        if self._first_attempt is None or self._first_attempt.done():
+            return
+        if error is None:
+            self._first_attempt.set_result(None)
+        else:
+            self._first_attempt.set_exception(error)
+
+    def _on_websocket_task_done(self, first_attempt: asyncio.Future[None], task: asyncio.Task[None]) -> None:
+        """Clean up after the connection task, also when it was cancelled before it started running.
+
+        Args:
+            first_attempt: Future awaited by the `connect` that started the task
+            task: The finished connection task
+        """
+        # Lets `connect` return if the task was cancelled before the first attempt finished
+        first_attempt.cancel()
+
+        # Don't touch the state of a connection that has been started since
+        if self._websocket_task in {None, task}:
+            self._state = ConnectionState.DISCONNECTED
 
     async def _run_connection(self, websocket: ClientWebSocketResponse) -> None:
         """Receive events and send queued data until the connection closes or fails.
@@ -471,44 +452,39 @@ class Halo:
             data = await self._queue.get()
             await websocket.send_str(data)
 
-    async def _on_message(self, event: str) -> None:
-        """Handle WebSocket events."""
-        # Parsed once, as the raw callback also gets the event as a dict
+    async def _on_message(self, message: str) -> None:
+        """Handle a message received from the Halo."""
         try:
-            raw_event = json.loads(event)
-            # Trigger callbacks for raw events immediately in case there are deserialization problems
+            # Parsed once, as the raw callback also gets the event as a dict
+            raw_event = json.loads(message)
+            # Triggered before deserializing, so the raw callback also gets events that can't be deserialized
             if self._on_all_events_raw:
                 await self._trigger_callback(self._on_all_events_raw, raw_event)
 
-            deserialized_data = Event.from_dict(raw_event).event
+            event = Event.from_dict(raw_event).event
         except (ValueError, AttributeError):
-            self._logger.exception("%s unable to deserialize WebSocket event: %s", self.host, event)
+            self._logger.exception("%s unable to deserialize WebSocket event: %s", self.host, message)
             return
 
-        if isinstance(deserialized_data, StatusEvent):
-            self._on_status_event(deserialized_data)
+        if isinstance(event, StatusEvent):
+            self._on_status_event(event)
 
-        # Handle all events if defined
         if self._on_all_events:
-            await self._trigger_callback(self._on_all_events, deserialized_data, deserialized_data.type_)
+            await self._trigger_callback(self._on_all_events, event, event.type_)
 
-        # Handle specific events if defined
-        if triggered_event := self._event_callbacks.get(deserialized_data.type_):
-            await self._trigger_callback(triggered_event, deserialized_data)
+        if callback := self._event_callbacks.get(event.type_):
+            await self._trigger_callback(callback, event)
 
     def _on_status_event(self, event: StatusEvent) -> None:
         """Detect an accepted or rejected configuration."""
-        if event.state is StatusEventState.OK and event.message is not None and event.message.lower() == _CONFIGURATION_ACCEPTED_MESSAGE:
+        message = (event.message or "").lower()
+        if event.state is StatusEventState.OK and message == _CONFIGURATION_ACCEPTED_MESSAGE:
             self._configuration_accepted = True
-        elif (
-            event.state is StatusEventState.ERROR
-            and event.message is not None
-            and event.message.lower().startswith(_INVALID_CONFIGURATION_MESSAGES)
-        ):
+        elif event.state is StatusEventState.ERROR and message.startswith(_INVALID_CONFIGURATION_MESSAGES):
             self._configuration_rejected = True
             self._logger.error("%s rejected the configuration: %s", self.host, event.message)
 
-    async def _trigger_callback(self, callback: Callable[..., Awaitable[None] | None], *args: object) -> None:
+    async def _trigger_callback(self, callback: _Callback[...], *args: object) -> None:
         """Trigger async or sync callback correctly.
 
         Errors raised by the callback are logged, so they can't break the connection.
@@ -520,44 +496,38 @@ class Halo:
         except Exception:
             self._logger.exception("%s error in callback %s", self.host, callback)
 
-    def get_on_connection_lost(self, on_connection_lost: Callable[[], Awaitable[None] | None]) -> None:
+    def get_on_connection_lost(self, on_connection_lost: _Callback[[]]) -> None:
         """Set callback for WebSocket connection lost."""
         self._on_connection_lost = on_connection_lost
 
-    def get_on_connection(self, on_connection: Callable[[], Awaitable[None] | None]) -> None:
+    def get_on_connection(self, on_connection: _Callback[[]]) -> None:
         """Set callback for WebSocket connection."""
         self._on_connection = on_connection
 
-    def get_all_events(
-        self,
-        on_all_events: Callable[[EventType, EventTypes], Awaitable[None] | None],
-    ) -> None:
+    def get_all_events(self, on_all_events: _Callback[[EventType, EventTypes]]) -> None:
         """Set callback for all events."""
         self._on_all_events = on_all_events
 
-    def get_all_events_raw(
-        self,
-        on_all_events_raw: Callable[[dict[str, Any]], Awaitable[None] | None],
-    ) -> None:
+    def get_all_events_raw(self, on_all_events_raw: _Callback[[dict[str, Any]]]) -> None:
         """Set callback for all events as dict."""
         self._on_all_events_raw = on_all_events_raw
 
-    def get_wheel_event(self, on_wheel_event: Callable[[WheelEvent], Awaitable[None] | None]) -> None:
+    def get_wheel_event(self, on_wheel_event: _Callback[[WheelEvent]]) -> None:
         """Set callback for WheelEvent."""
         self._event_callbacks[EventTypes.WHEEL] = on_wheel_event
 
-    def get_system_event(self, on_system_event: Callable[[SystemEvent], Awaitable[None] | None]) -> None:
+    def get_system_event(self, on_system_event: _Callback[[SystemEvent]]) -> None:
         """Set callback for SystemEvent."""
         self._event_callbacks[EventTypes.SYSTEM] = on_system_event
 
-    def get_status_event(self, on_status_event: Callable[[StatusEvent], Awaitable[None] | None]) -> None:
+    def get_status_event(self, on_status_event: _Callback[[StatusEvent]]) -> None:
         """Set callback for StatusEvent."""
         self._event_callbacks[EventTypes.STATUS] = on_status_event
 
-    def get_power_event(self, on_power_event: Callable[[PowerEvent], Awaitable[None] | None]) -> None:
+    def get_power_event(self, on_power_event: _Callback[[PowerEvent]]) -> None:
         """Set callback for PowerEvent."""
         self._event_callbacks[EventTypes.POWER] = on_power_event
 
-    def get_button_event(self, on_button_event: Callable[[ButtonEvent], Awaitable[None] | None]) -> None:
+    def get_button_event(self, on_button_event: _Callback[[ButtonEvent]]) -> None:
         """Set callback for ButtonEvent."""
         self._event_callbacks[EventTypes.BUTTON] = on_button_event

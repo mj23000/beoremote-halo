@@ -455,6 +455,25 @@ async def test_disconnect_while_connecting(unused_tcp_port: int) -> None:
     assert halo.connection_state is ConnectionState.DISCONNECTED
 
 
+async def test_connect_while_disconnecting(unused_tcp_port: int) -> None:
+    """Test that `connect` returns when it is replaced by a new `connect` while `disconnect` is waiting."""
+    halo = Halo("127.0.0.1", port=unused_tcp_port)
+
+    first_connect = asyncio.create_task(halo.connect(reconnect=True))
+    # Let `connect` create the connection task, but not run it
+    await asyncio.sleep(0)
+    # Started before the cancelled connection task has finished
+    disconnect = asyncio.create_task(halo.disconnect())
+    second_connect = asyncio.create_task(halo.connect(reconnect=True))
+
+    await asyncio.wait_for(first_connect, TIMEOUT)
+    await asyncio.wait_for(disconnect, TIMEOUT)
+    await asyncio.wait_for(second_connect, TIMEOUT)
+
+    await halo.disconnect()
+    assert halo.connection_state is ConnectionState.DISCONNECTED
+
+
 async def test_connect_cancelled(unused_tcp_port: int) -> None:
     """Test that cancelling `connect` is propagated to the caller."""
     halo = Halo("127.0.0.1", port=unused_tcp_port)
